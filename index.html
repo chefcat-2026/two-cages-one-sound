@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Two Cages, One Sound — U. Rinner</title>
+<meta name="description" content="Eine Rock'n'Roll Geschichte. Borehamwood, 1995. Zwei Käfige. Zwei Welten. Ein Sound.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Metal+Mania&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0a0a0a;
+    --paper:#f2ede4;
+    --paper-dim:#e6dfd0;
+    --blood:#c41e2a;
+    --blood-bright:#e6394a;
+    --ash:#8a8580;
+    --line:#3a3632;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--ink);
+    color:var(--paper);
+    font-family:'Archivo',sans-serif;
+    line-height:1.5;
+    overflow-x:hidden;
+  }
+  a{color:inherit;}
+  img{max-width:100%;display:block;}
+
+  /* texture */
+  body::before{
+    content:"";
+    position:fixed;inset:0;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, transparent 1px, transparent 2px, rgba(255,255,255,0.015) 3px);
+    pointer-events:none;
+    z-index:1;
+  }
+
+  .wrap{max-width:1040px;margin:0 auto;padding:0 24px;}
+
+  /* NAV */
+  nav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(10,10,10,0.92);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid #2a2622;
+  }
+  nav .wrap{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 24px;
+  }
+  .brand{
+    font-family:'Metal Mania',cursive;
+    font-size:1.3rem;
+    color:var(--blood-bright);
+    letter-spacing:1px;
+    text-decoration:none;
+  }
+  .navlinks{display:flex;gap:28px;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;}
+  .navlinks a{text-decoration:none;color:var(--ash);transition:color .2s;}
+  .navlinks a:hover{color:var(--blood-bright);}
+  .navlinks a:focus-visible{outline:2px solid var(--blood-bright);outline-offset:4px;}
+
+  /* HERO */
+  .hero{
+    position:relative;
+    padding:110px 24px 90px;
+    text-align:center;
+    background:
+      radial-gradient(ellipse at 50% -10%, rgba(196,30,42,0.18), transparent 60%),
+      var(--ink);
+    border-bottom:1px solid #2a2622;
+  }
+  .eyebrow{
+    font-size:0.78rem;
+    letter-spacing:0.25em;
+    text-transform:uppercase;
+    color:var(--blood-bright);
+    margin-bottom:22px;
+    font-weight:600;
+  }
+  .hero h1{
+    font-family:'Metal Mania',cursive;
+    font-size:clamp(2.6rem, 8vw, 5.2rem);
+    line-height:1.05;
+    color:var(--paper);
+    text-shadow: 3px 3px 0 var(--blood);
+    margin-bottom:26px;
+  }
+  .hero .tagline{
+    font-family:'Source Serif 4',serif;
+    font-style:italic;
+    font-size:1.2rem;
+    color:#c9c2b4;
+    max-width:520px;
+    margin:0 auto 40px;
+  }
+  .cta-row{
+    display:flex;gap:14px;justify-content:center;flex-wrap:wrap;
+  }
+  .btn{
+    display:inline-block;
+    padding:14px 28px;
+    font-size:0.85rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    text-decoration:none;
+    font-weight:700;
+    border:2px solid var(--blood);
+    transition:all .2s;
+  }
+  .btn-solid{background:var(--blood);color:var(--paper);}
+  .btn-solid:hover{background:var(--blood-bright);border-color:var(--blood-bright);}
+  .btn-ghost{background:transparent;color:var(--paper);}
+  .btn-ghost:hover{background:rgba(196,30,42,0.15);}
+  .btn:focus-visible{outline:2px solid var(--paper);outline-offset:3px;}
+
+  /* COVER STRIP */
+  .cover-strip{
+    padding:0;
+    text-align:center;
+    background:var(--ink);
+  }
+  .cover-frame{
+    max-width:280px;
+    margin:-46px auto 0;
+    position:relative;
+    z-index:2;
+    border:6px solid var(--ink);
+    box-shadow:0 30px 60px rgba(0,0,0,0.6);
+  }
+  .cover-frame img{width:100%;}
+  .cover-caption{
+    font-size:0.72rem;
+    color:var(--ash);
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    margin:16px 0 60px;
+  }
+
+  /* TORN DIVIDER */
+  .torn{
+    height:36px;
+    background:var(--paper);
+    clip-path:polygon(0% 40%,3% 0%,7% 45%,11% 5%,15% 50%,19% 10%,23% 42%,27% 2%,31% 48%,35% 8%,39% 44%,43% 0%,47% 46%,51% 6%,55% 50%,59% 12%,63% 40%,67% 4%,71% 48%,75% 8%,79% 44%,83% 0%,87% 46%,91% 6%,95% 50%,100% 20%,100% 100%,0% 100%);
+  }
+  .torn-rev{
+    height:36px;
+    background:var(--ink);
+    clip-path:polygon(0% 60%,3% 100%,7% 55%,11% 95%,15% 50%,19% 90%,23% 58%,27% 98%,31% 52%,35% 92%,39% 56%,43% 100%,47% 54%,51% 94%,55% 50%,59% 88%,63% 60%,67% 96%,71% 52%,75% 92%,79% 56%,83% 100%,87% 54%,91% 94%,95% 50%,100% 80%,100% 0%,0% 0%);
+  }
+
+  /* STORY SECTION (paper) */
+  .story{
+    background:var(--paper);
+    color:var(--ink);
+    padding:70px 24px 90px;
+  }
+  .story .wrap{max-width:680px;}
+  .story blockquote{
+    font-family:'Source Serif 4',serif;
+    font-size:1.3rem;
+    line-height:1.6;
+    border-left:4px solid var(--blood);
+    padding-left:24px;
+    margin:0 0 32px;
+  }
+  .story blockquote em{font-style:italic;color:var(--blood);}
+  .story p.lede{
+    font-family:'Source Serif 4',serif;
+    font-size:1.05rem;
+    line-height:1.75;
+    color:#2a2622;
+  }
+  .signoff{
+    font-family:'Source Serif 4',serif;
+    font-style:italic;
+    text-align:center;
+    color:var(--ash);
+    margin-top:50px;
+    font-size:1rem;
+  }
+
+  /* GALLERY / EXCERPT PAGES */
+  .gallery{
+    background:var(--ink);
+    padding:80px 24px;
+    border-top:1px solid #2a2622;
+  }
+  .section-label{
+    font-size:0.78rem;
+    letter-spacing:0.25em;
+    text-transform:uppercase;
+    color:var(--blood-bright);
+    text-align:center;
+    margin-bottom:14px;
+    font-weight:700;
+  }
+  .section-title{
+    font-family:'Metal Mania',cursive;
+    font-size:clamp(1.8rem,4vw,2.6rem);
+    text-align:center;
+    margin-bottom:48px;
+    color:var(--paper);
+  }
+  .gallery-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:20px;
+  }
+  .gallery-grid figure{
+    border:1px solid #2a2622;
+    background:#141210;
+  }
+  .gallery-grid img{width:100%;}
+  .gallery-grid figcaption{
+    padding:12px 14px;
+    font-size:0.78rem;
+    color:var(--ash);
+    font-style:italic;
+    font-family:'Source Serif 4',serif;
+  }
+
+  /* FACTS */
+  .facts{
+    background:var(--paper);
+    color:var(--ink);
+    padding:60px 24px;
+  }
+  .facts-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:30px;
+    text-align:center;
+    max-width:700px;
+    margin:0 auto;
+  }
+  .fact-num{
+    font-family:'Metal Mania',cursive;
+    font-size:2.2rem;
+    color:var(--blood);
+    display:block;
+  }
+  .fact-label{
+    font-size:0.75rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--ash);
+  }
+
+  /* SHOP */
+  .shop{
+    background:var(--ink);
+    padding:90px 24px;
+    text-align:center;
+  }
+  .shop-list{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    max-width:360px;
+    margin:40px auto 0;
+  }
+  .shop-list a{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:16px 22px;
+    border:1px solid #3a3632;
+    text-decoration:none;
+    color:var(--paper);
+    font-size:0.92rem;
+    transition:all .2s;
+  }
+  .shop-list a:hover{border-color:var(--blood);background:rgba(196,30,42,0.08);}
+  .shop-list a:focus-visible{outline:2px solid var(--blood-bright);outline-offset:2px;}
+  .shop-list .price{color:var(--ash);font-size:0.82rem;}
+
+  /* FOOTER */
+  footer{
+    background:var(--ink);
+    border-top:1px solid #2a2622;
+    padding:40px 24px;
+    text-align:center;
+  }
+  footer .brand{display:block;margin-bottom:10px;}
+  footer p{font-size:0.78rem;color:var(--ash);}
+  footer a{color:var(--ash);text-decoration:underline;text-underline-offset:3px;}
+  footer a:hover{color:var(--blood-bright);}
+
+  @media (max-width:600px){
+    .navlinks{gap:16px;font-size:0.72rem;}
+    .hero{padding:80px 20px 70px;}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto;}
+    *{transition:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a href="#top" class="brand">Two Cages, One Sound</a>
+    <div class="navlinks">
+      <a href="#story">Die Geschichte</a>
+      <a href="#seiten">Leseprobe</a>
+      <a href="#kaufen">Kaufen</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="eyebrow">Eine Rock'n'Roll Geschichte</div>
+  <h1>Two Cages,<br>One Sound</h1>
+  <p class="tagline">Borehamwood, 1995. Zwei Käfige. Zwei Welten. Ein Sound.</p>
+  <div class="cta-row">
+    <a href="#kaufen" class="btn btn-solid">Buch kaufen</a>
+    <a href="#seiten" class="btn btn-ghost">Leseprobe</a>
+  </div>
+</header>
+
+<div class="cover-strip">
+  <div class="cover-frame">
+    <!-- COVER-BILD HIER EINSETZEN: ersetze diesen Kommentar mit
+         <img src="cover.jpg" alt="Buchcover Two Cages, One Sound"> -->
+    <img src="cover.jpg" alt="Buchcover Two Cages, One Sound">
+  </div>
+  <p class="cover-caption">U. Rinner · Taschenbuch · 76 Seiten</p>
+</div>
+
+<div class="torn"></div>
+
+<section class="story" id="story">
+  <div class="wrap">
+    <blockquote>
+      John ist ruhig. Er war immer ruhig. Theo ist das Gegenteil — <em>zu viel Energie für jeden Raum, zu viel Fell für jeden Käfig, zu viel von allem.</em>
+    </blockquote>
+    <p class="lede">
+      Sie vertragen sich nicht. Sie brauchen sich trotzdem.<br><br>
+      Was folgt, ist eine Rock'n'Roll-Geschichte aus den Londoner Untergrund-Clubs der 90er — laut, dunkel, mit schwarzem Humor und mehr Grünkohl als vernünftig ist. Eine Geschichte über Musik als einzige Sprache, die zählt. Über Orte, die einen formen, und Orte, die einen loslassen. Über das, was bleibt, wenn der Lärm aufhört.<br><br>
+      <em>Two Cages, One Sound</em> ist keine Geschichte über Meerschweinchen.<br>
+      Oder doch?
+    </p>
+    <p class="signoff">Für alle, die nirgends ganz hingepasst haben — außer vielleicht zusammen.</p>
+  </div>
+</section>
+
+<div class="torn-rev"></div>
+
+<section class="gallery" id="seiten">
+  <div class="wrap">
+    <div class="section-label">Ein Blick hinein</div>
+    <div class="section-title">Aus dem Buch</div>
+    <div class="gallery-grid">
+      <!-- SEITENFOTOS HIER EINSETZEN: je ein <figure> pro Bild -->
+      <figure>
+        <img src="seite1.jpg" alt="Buchseite: Prolog">
+        <figcaption>Prolog: Borehamwood, 1995</figcaption>
+      </figure>
+      <figure>
+        <img src="seite2.jpg" alt="Buchseite: Camden Gig">
+        <figcaption>Camden. The Room With No Name.</figcaption>
+      </figure>
+      <figure>
+        <img src="seite3.jpg" alt="Buchseite: Die Z7, Pratteln">
+        <figcaption>Pratteln. Die Z7.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="facts">
+  <div class="facts-grid">
+    <div>
+      <span class="fact-num">76</span>
+      <span class="fact-label">Seiten</span>
+    </div>
+    <div>
+      <span class="fact-num">20</span>
+      <span class="fact-label">Illustrationen</span>
+    </div>
+    <div>
+      <span class="fact-num">'96</span>
+      <span class="fact-label">Camden, London</span>
+    </div>
+    <div>
+      <span class="fact-num">1.</span>
+      <span class="fact-label">Buch von U. Rinner</span>
+    </div>
+  </div>
+</section>
+
+<section class="shop" id="kaufen">
+  <div class="section-label">Erhältlich bei</div>
+  <div class="section-title">Jetzt lesen</div>
+  <div class="shop-list">
+    <a href="https://buchshop.bod.ch/two-cages-one-sound-u-rinner-9783696394554" target="_blank" rel="noopener">
+      <span>BoD Buchshop</span>
+      <span class="price">CHF 18.90</span>
+    </a>
+    <a href="https://www.orellfuessli.ch/shop/home/artikeldetails/A1081087944" target="_blank" rel="noopener">
+      <span>Orell Füssli</span>
+      <span class="price">CHF 19.90</span>
+    </a>
+    <a href="https://amzn.eu/d/040M7Zzq" target="_blank" rel="noopener">
+      <span>Amazon</span>
+      <span class="price">→</span>
+    </a>
+  </div>
+</section>
+
+<footer>
+  <a href="#top" class="brand" style="font-family:'Metal Mania',cursive;color:var(--blood-bright);text-decoration:none;font-size:1rem;">Two Cages, One Sound</a>
+  <p>U. Rinner · <a href="https://www.instagram.com/chefcat.official" target="_blank" rel="noopener">@chefcat.official</a></p>
+  <p style="margin-top:8px;">ISBN 978-3-6963-9455-4</p>
+</footer>
+
+</body>
+</html>
