@@ -9,7 +9,7 @@
   body{
     background:#0a0a0a;color:#f2ede4;font-family:Georgia,serif;
     display:flex;flex-direction:column;align-items:center;
-    min-height:100vh;padding:16px;touch-action:none;
+    min-height:100vh;padding:16px;touch-action:manipulation;
   }
   .back-link{color:#8a8580;text-decoration:none;font-size:0.8rem;align-self:flex-start;margin-bottom:10px;}
   .back-link:hover{color:#e6394a;}
@@ -67,6 +67,9 @@
     background:#141210;border:2px solid #3a3632;color:#f2ede4;
     font-size:1.3rem;border-radius:6px;
     -webkit-tap-highlight-color:transparent;
+    touch-action:none;
+    user-select:none;
+    -webkit-user-select:none;
   }
   #controls button:active{background:#c41e2a;border-color:#c41e2a;}
   .ctrl-up{grid-column:2;grid-row:1;}
@@ -117,10 +120,10 @@
 </div>
 
 <div id="controls">
-  <button class="ctrl-up" ontouchstart="startMove('up')" ontouchend="stopMove()" onmousedown="startMove('up')" onmouseup="stopMove()">▲</button>
-  <button class="ctrl-left" ontouchstart="startMove('left')" ontouchend="stopMove()" onmousedown="startMove('left')" onmouseup="stopMove()">◀</button>
-  <button class="ctrl-right" ontouchstart="startMove('right')" ontouchend="stopMove()" onmousedown="startMove('right')" onmouseup="stopMove()">▶</button>
-  <button class="ctrl-down" ontouchstart="startMove('down')" ontouchend="stopMove()" onmousedown="startMove('down')" onmouseup="stopMove()">▼</button>
+  <button class="ctrl-up" data-dir="up">▲</button>
+  <button class="ctrl-left" data-dir="left">◀</button>
+  <button class="ctrl-right" data-dir="right">▶</button>
+  <button class="ctrl-down" data-dir="down">▼</button>
 </div>
 
 <div class="footnote">Vier Stationen. Lauf hin, um die Szene zu sehen.</div>
@@ -200,6 +203,25 @@
     if (e.key === 'ArrowRight') startMove('right');
   });
   document.addEventListener('keyup', stopMove);
+
+  document.querySelectorAll('#controls button').forEach(btn => {
+    const dir = btn.getAttribute('data-dir');
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startMove(dir);
+    }, { passive: false });
+    btn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      stopMove();
+    }, { passive: false });
+    btn.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      stopMove();
+    }, { passive: false });
+    btn.addEventListener('mousedown', () => startMove(dir));
+    btn.addEventListener('mouseup', () => stopMove());
+    btn.addEventListener('mouseleave', () => stopMove());
+  });
 
   const hotspotEls = {
     camden: document.getElementById('hs-camden'),
