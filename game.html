@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <meta property="og:title" content="Camden Clicker: Theo & John">
+    <meta property="og:description" content="Ein kleiner Klicker zu Two Cages, One Sound. Nicht ganz ernst gemeint.">
+    <meta property="og:type" content="website">
+
+    <title>Camden Clicker: Theo & John</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: Georgia, 'Times New Roman', serif;
+            background-color: #0a0a0a;
+            color: #f2ede4;
+            text-align: center;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .back-link {
+            color: #8a8580;
+            text-decoration: none;
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+            align-self: flex-start;
+            max-width: 500px;
+            width: 100%;
+        }
+        .back-link:hover { color: #e6394a; }
+        .game-box {
+            background-color: #141210;
+            border: 3px solid #3a3632;
+            border-radius: 6px;
+            padding: 20px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0px 0px 24px rgba(196, 30, 42, 0.25);
+        }
+        h1 {
+            font-family: Georgia, serif;
+            font-weight: bold;
+            color: #fff;
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+            letter-spacing: 0.02em;
+        }
+        .subtitle {
+            color: #8a8580;
+            font-size: 0.8rem;
+            font-style: italic;
+            margin-bottom: 20px;
+        }
+        .stats {
+            background: #1c1a17;
+            border: 1px solid #3a3632;
+            padding: 15px;
+            border-radius: 4px;
+            color: #fff;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+        }
+        .monster {
+            font-size: 5rem;
+            margin: 20px 0;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.1s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .monster:active { transform: scale(0.9); }
+        .health-bar {
+            background: #2a2622;
+            height: 25px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            border: 1px solid #3a3632;
+        }
+        .health-fill {
+            background: #c41e2a;
+            width: 100%;
+            height: 100%;
+            transition: width 0.2s ease-out;
+        }
+        .hp-text { color: #c9c2b4; margin-bottom: 20px; font-size: 0.9rem; }
+        
+        button {
+            background-color: #c41e2a;
+            color: #f2ede4;
+            border: 2px solid #c41e2a;
+            padding: 15px;
+            font-size: 1rem;
+            font-weight: bold;
+            font-family: Georgia, serif;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            width: 100%;
+            transition: background-color 0.2s;
+        }
+        button:hover:not(:disabled) { background-color: #e6394a; border-color: #e6394a; }
+        button:disabled { background-color: #232019; color: #5a5550; border-color: #3a3632; cursor: not-allowed; }
+        .footnote {
+            color: #5a5550;
+            font-size: 0.72rem;
+            margin-top: 18px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <a href="index.html" class="back-link">&larr; Zurück zu Two Cages, One Sound</a>
+
+    <div class="game-box">
+        <h1>CAMDEN CLICKER</h1>
+        <div class="subtitle">Zwei Käfige. Zwei Welten. Ein Highscore.</div>
+        
+        <div class="stats">
+            <div>🎸 <span id="gold">0</span></div>
+            <div>⭐ Gig <span id="level">1</span></div>
+        </div>
+        
+        <div class="monster" id="monster" onclick="attack()">🌧️</div>
+        
+        <div class="health-bar">
+            <div class="health-fill" id="health-fill"></div>
+        </div>
+        <div class="hp-text">Lärm: <span id="hp">50</span> / <span id="max-hp">50</span></div>
+
+        <hr style="border-color: #3a3632; margin: 20px 0;">
+
+        <button id="btn-theo" onclick="upgrade('theo')">
+            🖤 Theo anheizen (10 🎸) <br> <small>+2 Klick-Energie</small>
+        </button>
+        <button id="btn-john" onclick="upgrade('john')">
+            🥁 John im Rhythmus (50 🎸) <br> <small>+5 Automatik/Sek</small>
+        </button>
+
+        <div class="footnote">Zu viel Energie. Zu viel Rhythmus. Zu viel von allem.</div>
+    </div>
+
+    <script>
+        let gold = 0;
+        let level = 1;
+        let clickDamage = 5;
+        let autoDamage = 0;
+        let maxHp = 50;
+        let currentHp = 50;
+        let costTheo = 10;
+        let costJohn = 50;
+
+        const scenes = ["🌧️", "🎤", "🐭", "🥬", "🚌", "📻", "🕯️", "🎫"];
+
+        function updateUI() {
+            document.getElementById('gold').innerText = gold;
+            document.getElementById('level').innerText = level;
+            document.getElementById('hp').innerText = Math.ceil(currentHp);
+            document.getElementById('max-hp').innerText = maxHp;
+            
+            let hpPercentage = Math.max(0, (currentHp / maxHp) * 100);
+            document.getElementById('health-fill').style.width = hpPercentage + "%";
+
+            document.getElementById('btn-theo').disabled = gold < costTheo;
+            document.getElementById('btn-john').disabled = gold < costJohn;
+
+            localStorage.setItem('camdenClickerSave', JSON.stringify({
+                gold, level, clickDamage, autoDamage, maxHp, currentHp, costTheo, costJohn
+            }));
+        }
+
+        function attack() { dealDamage(clickDamage); }
+
+        function dealDamage(amount) {
+            currentHp -= amount;
+            if (currentHp <= 0) defeatScene();
+            updateUI();
+        }
+
+        function defeatScene() {
+            gold += level * 5;
+            level++;
+            maxHp = Math.floor(maxHp * 1.6);
+            currentHp = maxHp;
+            document.getElementById('monster').innerText = scenes[Math.floor(Math.random() * scenes.length)];
+        }
+
+        function upgrade(type) {
+            if (type === 'theo' && gold >= costTheo) {
+                gold -= costTheo;
+                clickDamage += 2;
+                costTheo = Math.floor(costTheo * 1.5);
+                document.getElementById('btn-theo').innerHTML = `🖤 Theo anheizen (${costTheo} 🎸) <br> <small>+2 Klick-Energie</small>`;
+            } else if (type === 'john' && gold >= costJohn) {
+                gold -= costJohn;
+                autoDamage += 5;
+                costJohn = Math.floor(costJohn * 1.8);
+                document.getElementById('btn-john').innerHTML = `🥁 John im Rhythmus (${costJohn} 🎸) <br> <small>+5 Automatik/Sek</small>`;
+            }
+            updateUI();
+        }
+
+        function loadSave() {
+            const saved = localStorage.getItem('camdenClickerSave');
+            if (saved) {
+                const s = JSON.parse(saved);
+                gold = s.gold; level = s.level; clickDamage = s.clickDamage;
+                autoDamage = s.autoDamage; maxHp = s.maxHp; currentHp = s.currentHp;
+                costTheo = s.costTheo; costJohn = s.costJohn;
+                document.getElementById('btn-theo').innerHTML = `🖤 Theo anheizen (${costTheo} 🎸) <br> <small>+2 Klick-Energie</small>`;
+                document.getElementById('btn-john').innerHTML = `🥁 John im Rhythmus (${costJohn} 🎸) <br> <small>+5 Automatik/Sek</small>`;
+            }
+        }
+
+        setInterval(() => {
+            if (autoDamage > 0) dealDamage(autoDamage);
+        }, 1000);
+
+        loadSave();
+        updateUI();
+    </script>
+</body>
+</html>

@@ -323,6 +323,13 @@
   .shop-list a:focus-visible{outline:2px solid var(--blood-bright);outline-offset:2px;}
   .shop-list .price{color:var(--ash);font-size:0.82rem;}
 
+  .bodShopWidget{
+    max-width:280px;
+    margin:0 auto 20px;
+    border-radius:4px;
+    overflow:hidden;
+  }
+
   /* FOOTER */
   footer{
     background:var(--ink);
@@ -442,6 +449,17 @@
 <section class="shop" id="kaufen">
   <div class="section-label">Erhältlich bei</div>
   <div class="section-title">Jetzt lesen</div>
+
+  <!-- ### Begin BoD ShopWidget (Print) -->
+  <div id="bodShopWidget_6484271_print" class="bodShopWidget"></div>
+  <script type="text/javascript">if(typeof checkLibExist == "undefined"){var script = document.createElement("script");script.src ="https://assets.bod.com/shopwidget/build/js/v1.1/shopWidget.min.js";script.type = "text/javascript";document.head.appendChild(script);var checkLibExist = true;}if(typeof books === "undefined") var books=[];books.push({"objID":6484271,"swKey":"2a81397988d1b1c0d54c5fff4f3ec4f9","type":"print","size":"large","font":"nonSerif","shadow":false,"contour":true,"coverContour":true,"fontColor":"#212529","contourColor":"#212529","shadowBtn":false,"contourBtn":false,"bgColor":"#fff","btnFontColor":"#fff","btnColor":"#fd6041","btnContourColor":"#fd6041","mandantShopUrl":"https://buchshop.bod.ch","lang":"de"});</script>
+  <!-- ### End BoD ShopWidget -->
+
+  <!-- ### Begin BoD ShopWidget (E-Book) -->
+  <div id="bodShopWidget_6484271_ebook" class="bodShopWidget"></div>
+  <script type="text/javascript">if(typeof checkLibExist == "undefined"){var script = document.createElement("script");script.src ="https://assets.bod.com/shopwidget/build/js/v1.1/shopWidget.min.js";script.type = "text/javascript";document.head.appendChild(script);var checkLibExist = true;}if(typeof books === "undefined") var books=[];books.push({"objID":6484271,"swKey":"2a81397988d1b1c0d54c5fff4f3ec4f9","type":"ebook","size":"large","font":"nonSerif","shadow":false,"contour":true,"coverContour":true,"fontColor":"#212529","contourColor":"#212529","shadowBtn":false,"contourBtn":false,"bgColor":"#fff","btnFontColor":"#fff","btnColor":"#fd6041","btnContourColor":"#fd6041","mandantShopUrl":"https://buchshop.bod.ch","lang":"de"});</script>
+  <!-- ### End BoD ShopWidget -->
+
   <div class="shop-list">
     <a href="https://buchshop.bod.ch/two-cages-one-sound-u-rinner-9783696394554" target="_blank" rel="noopener">
       <span>BoD Buchshop</span>
@@ -470,6 +488,7 @@
   <a href="#top" class="brand" style="font-family:'Metal Mania',cursive;color:var(--blood-bright);text-decoration:none;font-size:1rem;">Two Cages, One Sound</a>
   <p>U. Rinner · <a href="https://www.instagram.com/chefcat.official" target="_blank" rel="noopener">@chefcat.official</a></p>
   <p style="margin-top:8px;">ISBN 978-3-6963-9455-4</p>
+  <p style="margin-top:16px;"><a href="game.html" style="font-size:0.75rem;">🎮 Nicht ganz ernst gemeint: Camden Clicker</a></p>
 </footer>
 
 <!-- Besucherzähler: GoatCounter (dezent, kein Cookie-Banner nötig).
