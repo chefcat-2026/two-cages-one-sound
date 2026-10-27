@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Camden Command</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Echtzeitstrategie zu Two Cages, One Sound: John, Theo, Mäuse, Grünkohl und das Bauamt. Von Borehamwood bis zur Z7.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Metal+Mania&family=Archivo:wght@400;600;700&family=Archivo+Narrow:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one fixed screen. 3D canvas underneath, C&C-style sidebar right, objectives left, selection bottom. */
+  :root{
+    --ink:#0a0a0a;
+    --ink-2:#141210;
+    --ink-3:#1c1a17;
+    --paper:#f2ede4;
+    --paper-dim:#c9c2b4;
+    --ash:#8a8580;
+    --line:#3a3632;
+    --blood:#c41e2a;
+    --blood-bright:#e6394a;
+    --kale:#4f8a3a;
+    --kale-bright:#7fc45c;
+    --ruf:#e0b23a;
+    --bauamt:#3aa0c8;
+    --font-display:'Metal Mania', 'Impact', cursive;
+    --font-body:'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    --font-ui:'Archivo Narrow', 'Arial Narrow', Arial, sans-serif;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--ink);color:var(--paper);font-family:var(--font-body);overflow:hidden}
+  button{font-family:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  button:focus-visible,a:focus-visible{outline:2px solid var(--blood-bright);outline-offset:2px}
+  #app{position:fixed;inset:0;background:var(--ink);overflow:hidden;user-select:none;-webkit-user-select:none}
+  #gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+  /* HUD */
+  #hud{position:absolute;inset:0;pointer-events:none;font-family:var(--font-ui);display:none}
+  #hud.on{display:block}
+  .hud-box{background:rgba(14,12,10,.86);border:1px solid var(--line);box-shadow:0 0 0 1px rgba(0,0,0,.6) inset;pointer-events:auto}
+
+  #topbar{position:absolute;left:0;right:0;top:0;display:flex;align-items:stretch;gap:1px;
+    padding-top:env(safe-area-inset-top,0px);padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px));
+    background:rgba(10,10,10,.92);border-bottom:1px solid var(--line);pointer-events:auto;height:calc(44px + env(safe-area-inset-top,0px))}
+  #topbar .brand{font-family:var(--font-display);color:var(--blood-bright);font-size:1.35rem;letter-spacing:.03em;padding:0 14px;display:flex;align-items:center;white-space:nowrap}
+  #topbar .mtitle{color:var(--paper-dim);font-size:.85rem;display:flex;align-items:center;padding:0 10px;border-left:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .res{display:flex;align-items:center;gap:8px;padding:0 14px;border-left:1px solid var(--line);font-size:1rem;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .res .dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+  .res.kale .dot{background:var(--kale-bright)} .res.ruf .dot{background:var(--ruf)}
+  .res small{font-weight:400;color:var(--ash);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase}
+  .tb-btn{padding:0 12px;border-left:1px solid var(--line);color:var(--paper-dim);font-size:.8rem;letter-spacing:.06em;text-transform:uppercase}
+  .tb-btn:hover{color:var(--paper);background:rgba(255,255,255,.04)}
+  .tb-btn.active{color:var(--blood-bright)}
+
+  #objectives{position:absolute;left:max(10px,env(safe-area-inset-left,0px));top:calc(54px + env(safe-area-inset-top,0px));width:280px;max-width:calc(100vw - 32px);padding:10px 12px}
+  #objectives h3{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ash);margin-bottom:6px;font-weight:700}
+  #objectives ul{list-style:none;display:flex;flex-direction:column;gap:5px}
+  #objectives li{font-size:.86rem;line-height:1.3;padding-left:18px;position:relative;color:var(--paper-dim)}
+  #objectives li::before{content:"";position:absolute;left:0;top:5px;width:9px;height:9px;border:1px solid var(--ash);transform:rotate(45deg)}
+  #objectives li.done{color:var(--ash);text-decoration:line-through}
+  #objectives li.done::before{background:var(--kale-bright);border-color:var(--kale-bright)}
+  #objectives li.opt::after{content:" (optional)";color:var(--ash);font-size:.75em}
+  #objectives .timer{margin-top:8px;font-size:1.3rem;font-weight:700;color:var(--blood-bright);font-variant-numeric:tabular-nums}
+
+  #dialog{position:absolute;left:50%;top:calc(60px + env(safe-area-inset-top,0px));transform:translateX(-50%);max-width:min(560px,calc(100vw - 340px));padding:10px 16px;display:none;text-align:center}
+  #dialog.on{display:block}
+  #dialog .who{font-family:var(--font-display);color:var(--blood-bright);font-size:1.05rem;letter-spacing:.05em}
+  #dialog .who.john{color:var(--paper)} #dialog .who.sys{color:var(--ash)} #dialog .who.bauamt{color:var(--bauamt)} #dialog .who.cat{color:#b9b4c7}
+  #dialog .line{font-family:var(--font-body);font-size:1rem;line-height:1.35;color:var(--paper)}
+
+  #sidebar{position:absolute;right:max(0px,env(safe-area-inset-right,0px));top:calc(44px + env(safe-area-inset-top,0px));bottom:0;width:236px;display:flex;flex-direction:column;background:rgba(14,12,10,.92);border-left:1px solid var(--line);pointer-events:auto}
+  #minimap{width:100%;aspect-ratio:1/1;display:block;background:#000;border-bottom:1px solid var(--line);cursor:crosshair}
+  .tabs{display:flex;border-bottom:1px solid var(--line)}
+  .tabs button{flex:1;padding:8px 0;font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ash);border-bottom:2px solid transparent}
+  .tabs button.active{color:var(--paper);border-bottom-color:var(--blood)}
+  #buildgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px;overflow-y:auto;flex:1;align-content:start}
+  .bb{position:relative;background:var(--ink-3);border:1px solid var(--line);padding:8px 8px 7px;text-align:left;display:flex;flex-direction:column;gap:3px;min-height:74px;overflow:hidden}
+  .bb:hover:not(:disabled){border-color:var(--ash)}
+  .bb:disabled{opacity:.45;cursor:not-allowed}
+  .bb.placing{border-color:var(--blood-bright);box-shadow:0 0 0 1px var(--blood-bright) inset}
+  .bb .ic{font-size:1.35rem;line-height:1}
+  .bb .nm{font-size:.78rem;font-weight:700;line-height:1.1}
+  .bb .cs{font-size:.72rem;color:var(--kale-bright);font-variant-numeric:tabular-nums}
+  .bb .cs.ruf{color:var(--ruf)}
+  .bb .prog{position:absolute;left:0;bottom:0;height:3px;background:var(--blood-bright);width:0}
+  .bb .q{position:absolute;right:6px;top:5px;font-size:.72rem;background:var(--blood);color:#fff;padding:0 5px;border-radius:2px;font-weight:700}
+  .bb .req{font-size:.66rem;color:var(--ash);line-height:1.1}
+  #sidebar .hint{font-size:.7rem;color:var(--ash);padding:8px 10px;border-top:1px solid var(--line);line-height:1.35}
+
+  #selpanel{position:absolute;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(calc(-50% - 118px));min-width:300px;max-width:calc(100vw - 260px);padding:8px 12px;display:none;gap:12px;align-items:center}
+  #selpanel.on{display:flex}
+  #selpanel .portrait{width:52px;height:52px;border:1px solid var(--line);background:var(--ink-3);display:flex;align-items:center;justify-content:center;font-size:1.7rem;flex:none}
+  #selpanel .info{min-width:0;flex:1}
+  #selpanel .nm{font-family:var(--font-display);font-size:1.15rem;letter-spacing:.04em;color:var(--paper);line-height:1.1}
+  #selpanel .ds{font-size:.75rem;color:var(--ash);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hpbar{height:6px;background:#2a2622;border:1px solid var(--line);margin-top:4px;position:relative}
+  .hpbar i{position:absolute;left:0;top:0;bottom:0;background:var(--kale-bright)}
+  #abilities{display:flex;gap:6px}
+  .ab{width:58px;height:58px;border:1px solid var(--line);background:var(--ink-3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;overflow:hidden}
+  .ab .ic{font-size:1.25rem;line-height:1}
+  .ab .k{font-size:.62rem;color:var(--ash);letter-spacing:.06em}
+  .ab .cd{position:absolute;left:0;right:0;bottom:0;background:rgba(196,30,42,.55);height:0}
+  .ab:hover:not(:disabled){border-color:var(--blood-bright)}
+  .ab:disabled{opacity:.5;cursor:default}
+  .ab[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:62px;left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--ink);border:1px solid var(--line);padding:4px 8px;font-size:.72rem;color:var(--paper-dim);z-index:5}
+
+  #log{position:absolute;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(92px + env(safe-area-inset-bottom,0px));width:300px;max-width:calc(100vw - 260px);display:flex;flex-direction:column;gap:3px;pointer-events:none}
+  #log div{font-size:.78rem;color:var(--paper-dim);background:rgba(10,10,10,.7);padding:3px 8px;border-left:2px solid var(--blood);opacity:1;transition:opacity 1s}
+  #log div.fade{opacity:0}
+
+  #cursorhint{position:absolute;left:50%;top:calc(50px + env(safe-area-inset-top,0px));transform:translateX(-50%);font-size:.78rem;color:var(--ruf);letter-spacing:.08em;text-transform:uppercase;display:none;background:rgba(10,10,10,.75);padding:4px 10px;border:1px solid var(--line)}
+  #cursorhint.on{display:block}
+  #selbox{position:absolute;border:1px solid var(--blood-bright);background:rgba(196,30,42,.12);display:none;pointer-events:none}
+
+  /* Overlays */
+  #overlay{position:absolute;inset:0;background:radial-gradient(ellipse at center, rgba(20,16,14,.96), rgba(10,10,10,.99));display:flex;align-items:center;justify-content:center;
+    padding-block:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow:auto}
+  #overlay::before{content:"";position:absolute;inset:0;background-image:repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, transparent 1px, transparent 2px, rgba(255,255,255,0.015) 3px);pointer-events:none}
+  #overlay.off{display:none}
+  .screen{position:relative;width:100%;max-width:720px;margin:auto}
+  .screen .eyebrow{font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:var(--ash)}
+  .screen h1{font-family:var(--font-display);font-size:clamp(2.6rem,9vw,5.2rem);line-height:.95;color:var(--paper);letter-spacing:.02em;text-wrap:balance}
+  .screen h1 em{font-style:normal;color:var(--blood-bright)}
+  .screen h2{font-family:var(--font-display);font-size:clamp(1.8rem,5vw,2.8rem);line-height:1;letter-spacing:.02em;text-wrap:balance}
+  .screen .caption{font-style:italic;color:var(--ash);font-size:.95rem;margin-top:6px}
+  .screen p{color:var(--paper-dim);line-height:1.5;max-width:62ch}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border:2px solid var(--blood);color:var(--paper);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:.85rem;text-decoration:none;background:transparent}
+  .btn:hover{background:var(--blood)}
+  .btn.solid{background:var(--blood)} .btn.solid:hover{background:var(--blood-bright);border-color:var(--blood-bright)}
+  .btn.ghost{border-color:var(--line);color:var(--paper-dim)} .btn.ghost:hover{background:var(--ink-3);border-color:var(--ash);color:var(--paper)}
+  .btn:disabled{opacity:.4;cursor:not-allowed;background:transparent}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+
+  .missions{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;margin-top:18px}
+  .missions button{width:100%;text-align:left;padding:12px 14px;border:1px solid var(--line);background:var(--ink-2);display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center}
+  .missions button:hover:not(:disabled){border-color:var(--blood)}
+  .missions button:disabled{opacity:.4;cursor:not-allowed}
+  .missions .n{font-family:var(--font-display);font-size:1.5rem;color:var(--blood-bright)}
+  .missions .t{font-weight:700;font-size:.95rem;line-height:1.15}
+  .missions .s{font-size:.75rem;color:var(--ash);font-style:italic}
+  .missions .st{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ash)}
+  .missions .st.done{color:var(--kale-bright)}
+
+  .brief{display:grid;gap:16px;margin-top:18px}
+  .brief .lines{border-left:2px solid var(--line);padding-left:16px;display:grid;gap:8px}
+  .brief .lines div{font-size:1rem;color:var(--paper-dim);line-height:1.35}
+  .brief .lines b{font-family:var(--font-display);font-weight:400;letter-spacing:.04em;color:var(--blood-bright);margin-right:6px}
+  .brief .lines b.john{color:var(--paper)} .brief .lines b.sys{color:var(--ash)} .brief .lines b.cat{color:#b9b4c7} .brief .lines b.bauamt{color:var(--bauamt)}
+  .brief .obj{background:var(--ink-2);border:1px solid var(--line);padding:12px 14px}
+  .brief .obj h4{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ash);margin-bottom:6px}
+  .brief .obj li{list-style:none;font-size:.9rem;color:var(--paper-dim);padding-left:16px;position:relative;line-height:1.4}
+  .brief .obj li::before{content:"";position:absolute;left:0;top:7px;width:7px;height:7px;border:1px solid var(--ash);transform:rotate(45deg)}
+
+  .help{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px;margin-top:14px}
+  .help div{display:flex;justify-content:space-between;gap:10px;font-size:.88rem;border-bottom:1px solid var(--line);padding:6px 0;color:var(--paper-dim)}
+  .help kbd{font-family:var(--font-ui);background:var(--ink-3);border:1px solid var(--line);padding:1px 7px;border-radius:3px;color:var(--paper);font-size:.8rem;white-space:nowrap}
+  .footnote{color:#5a5550;font-size:.72rem;font-style:italic;margin-top:18px}
+  .footnote a{color:var(--ash)}
+
+  @media (max-width: 760px){
+    #sidebar{width:170px}
+    #buildgrid{grid-template-columns:1fr}
+    #objectives{width:200px}
+    #dialog{max-width:calc(100vw - 200px)}
+    #selpanel{transform:translateX(calc(-50% - 85px));min-width:0;max-width:calc(100vw - 190px);flex-wrap:wrap}
+    #log{width:200px;max-width:calc(100vw - 190px)}
+    #topbar .mtitle{display:none}
+    .res small{display:none}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+  <div id="selbox"></div>
+
+  <div id="hud">
+    <div id="topbar">
+      <div class="brand">Camden Command</div>
+      <div class="mtitle" id="hud-mission"></div>
+      <div class="res kale"><span class="dot"></span><span id="r-kale">0</span><small>Grünkohl</small></div>
+      <div class="res ruf"><span class="dot"></span><span id="r-ruf">0</span><small>Ruf</small></div>
+      <button class="tb-btn" id="b-speed" title="Spielgeschwindigkeit">1×</button>
+      <button class="tb-btn" id="b-sound" title="Ton">Ton aus</button>
+      <button class="tb-btn" id="b-help">Hilfe</button>
+      <button class="tb-btn" id="b-menu">Menü</button>
+    </div>
+
+    <div id="objectives" class="hud-box">
+      <h3>Ziele</h3>
+      <ul id="objlist"></ul>
+      <div class="timer" id="objtimer" hidden></div>
+    </div>
+
+    <div id="dialog" class="hud-box"><div class="who" id="dlg-who"></div><div class="line" id="dlg-line"></div></div>
+    <div id="cursorhint"></div>
+
+    <div id="sidebar">
+      <canvas id="minimap" width="236" height="236"></canvas>
+      <div class="tabs"><button id="tab-b" class="active">Gebäude</button><button id="tab-u">Einheiten</button></div>
+      <div id="buildgrid"></div>
+      <div class="hint" id="sidehint">Linksklick wählt. Rechtsklick bewegt, greift an, erntet.</div>
+    </div>
+
+    <div id="selpanel" class="hud-box">
+      <div class="portrait" id="sel-portrait"></div>
+      <div class="info">
+        <div class="nm" id="sel-name"></div>
+        <div class="ds" id="sel-desc"></div>
+        <div class="hpbar"><i id="sel-hp"></i></div>
+      </div>
+      <div id="abilities"></div>
+    </div>
+
+    <div id="log"></div>
+  </div>
+
+  <div id="overlay"><div class="screen" id="screen"></div></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.2/three.min.js"></script>
+<script>
+/* =====================================================================
+   CAMDEN COMMAND — Echtzeitstrategie zu "Two Cages, One Sound" (U. Rinner)
+   Ein einzelnes HTML. Three.js für die 3D-Szene, alles andere von Hand.
+   ===================================================================== */
+'use strict';
+
+const CELL = 2;                 // Weltgröße einer Rasterzelle
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const lerp = (a,b,t) => a+(b-a)*t;
+const dist2 = (ax,az,bx,bz) => { const dx=ax-bx, dz=az-bz; return dx*dx+dz*dz; };
+const rnd = (a=1,b=0) => b + Math.random()*(a-b);
+let seed = 7; const srand = () => { seed = (seed*1103515245 + 12345) & 0x7fffffff; return seed/0x7fffffff; };
+
+/* ---------- Speicher (nur Fortschritt, optional) ---------- */
+const store = {
+  get(k, d){ try { const v = localStorage.getItem('cc_'+k); return v===null?d:JSON.parse(v); } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem('cc_'+k, JSON.stringify(v)); } catch(e){} }
+};
+
+/* ---------- Audio: synthetische Riffs, Gurren, Regen ---------- */
+const Audio = {
+  ctx:null, master:null, on:false, rain:null,
+  init(){
+    if (this.ctx) return;
+    try {
+      this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+      this.master = this.ctx.createGain(); this.master.gain.value = 0.0; this.master.connect(this.ctx.destination);
+      const sh = this.ctx.createWaveShaper(); const curve = new Float32Array(256);
+      for (let i=0;i<256;i++){ const x=i/128-1; curve[i]=Math.tanh(x*3); } sh.curve = curve;
+      this.dist = sh; this.distGain = this.ctx.createGain(); this.distGain.gain.value=0.35; sh.connect(this.distGain); this.distGain.connect(this.master);
+    } catch(e){ this.ctx=null; }
+  },
+  toggle(){ this.init(); if(!this.ctx) return false; this.on=!this.on; if (this.ctx.state==='suspended') this.ctx.resume(); this.master.gain.setTargetAtTime(this.on?0.7:0, this.ctx.currentTime, 0.05); if(this.on) this.startRain(); else this.stopRain(); return this.on; },
+  env(g, t, a, d, peak=1){ g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+a); g.gain.exponentialRampToValueAtTime(0.0001,t+a+d); },
+  chord(freqs, dur=0.5, vol=0.5){ // Johns Riff: schwere Powerchords, verzerrt
+    if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; const g=this.ctx.createGain(); this.env(g,t,0.01,dur,vol); g.connect(this.dist);
+    const lp=this.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1400; lp.connect(g);
+    freqs.forEach(f=>{ [0,-3,4].forEach(dt=>{ const o=this.ctx.createOscillator(); o.type='sawtooth'; o.frequency.value=f; o.detune.value=dt*2; o.connect(lp); o.start(t); o.stop(t+dur+0.1); }); });
+  },
+  hat(vol=0.25){ // Theos Anschlag: schnell, trocken
+    if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; const len=0.08; const buf=this.ctx.createBuffer(1,this.ctx.sampleRate*len,this.ctx.sampleRate); const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+    const s=this.ctx.createBufferSource(); s.buffer=buf; const hp=this.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=5000; const g=this.ctx.createGain(); g.gain.value=vol; s.connect(hp); hp.connect(g); g.connect(this.master); s.start(t);
+  },
+  purr(dur=1.2){ // Gurren
+    if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; const o=this.ctx.createOscillator(); o.type='triangle'; o.frequency.value=58; const lfo=this.ctx.createOscillator(); lfo.frequency.value=22; const lg=this.ctx.createGain(); lg.gain.value=0.5; lfo.connect(lg); const g=this.ctx.createGain(); g.gain.value=0; lg.connect(g.gain); this.env(g,t,0.1,dur,0.6); o.connect(g); g.connect(this.master); o.start(t); lfo.start(t); o.stop(t+dur+0.2); lfo.stop(t+dur+0.2);
+  },
+  thud(){ if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; const o=this.ctx.createOscillator(); o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(40,t+0.25); const g=this.ctx.createGain(); this.env(g,t,0.005,0.3,0.6); o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.4); },
+  paper(){ if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; const o=this.ctx.createOscillator(); o.type='square'; o.frequency.setValueAtTime(900,t); o.frequency.exponentialRampToValueAtTime(300,t+0.12); const g=this.ctx.createGain(); this.env(g,t,0.005,0.12,0.12); o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.2); },
+  squeak(){ if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; const o=this.ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(1800,t); o.frequency.exponentialRampToValueAtTime(2600,t+0.15); const g=this.ctx.createGain(); this.env(g,t,0.01,0.2,0.18); o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.3); },
+  startRain(){ if(!this.ctx||this.rain||!game||!game.mission||!game.mission.rain) return; const len=2; const buf=this.ctx.createBuffer(1,this.ctx.sampleRate*len,this.ctx.sampleRate); const d=buf.getChannelData(0); let b0=0,b1=0; for(let i=0;i<d.length;i++){ const w=Math.random()*2-1; b0=0.99*b0+w*0.1; b1=0.96*b1+w*0.05; d[i]=(b0+b1)*0.6; } const s=this.ctx.createBufferSource(); s.buffer=buf; s.loop=true; const lp=this.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900; const g=this.ctx.createGain(); g.gain.value=0.12; s.connect(lp); lp.connect(g); g.connect(this.master); s.start(); this.rain={s,g}; },
+  stopRain(){ if(this.rain){ try{this.rain.s.stop();}catch(e){} this.rain=null; } }
+};
+
+/* ---------- Spieldaten: Einheiten ---------- */
+// team 1 = Die Band, team 2 = Das Bauamt, team 0 = neutral
+const UNITS = {
+  john:    {name:'John', ic:'🎸', hp:420, speed:3.4, dmg:34, range:5.5, cd:1.6, aoe:2.4, r:0.55, hero:true, acquire:9, desc:'Langsam. Schwer. Jeder Ton wie ein Stein, der ins Wasser fällt.', model:'john', sfx:'chord'},
+  theo:    {name:'Theo', ic:'🖤', hp:300, speed:6.4, dmg:13, range:3.6, cd:0.42, r:0.55, hero:true, acquire:9, desc:'Zu viel Energie für jeden Raum. Gurren beruhigt alle in der Nähe.', model:'theo', sfx:'hat', aura:{radius:7.5, speed:1.2, dmg:1.15}},
+  maus:    {name:'Maus', ic:'🐭', hp:40, speed:6.2, dmg:3, range:1.1, cd:0.8, r:0.3, cost:30, time:5, harvester:true, carry:12, acquire:0, desc:'Will das Futter. Kommt trotzdem wegen der Musik. Erntet Grünkohl.', model:'maus', sfx:'squeak'},
+  fan:     {name:'Fan', ic:'🤘', hp:95, speed:4.6, dmg:9, range:1.7, cd:0.9, r:0.42, cost:60, time:8, acquire:7, desc:'Leder, Spikes, ausgeblichenes Band-Shirt. Nahkampf.', model:'fan', sfx:'hat'},
+  roadie:  {name:'Roadie', ic:'🔊', hp:170, speed:3.6, dmg:17, range:7.5, cd:1.4, r:0.5, cost:120, time:13, acquire:9, req:'buehne', desc:'Trägt den Verstärker. Fernkampf. Schleppt alles, fragt nichts.', model:'roadie', sfx:'chord', proj:0xe6394a},
+  smokey:  {name:'Smokey', ic:'🐈', hp:650, speed:4.4, dmg:42, range:2.2, cd:1.25, r:0.75, hero:true, acquire:9, desc:'Britisch Kurzhaar. Ein Blick, der sagt: registriert, für unwichtig befunden.', model:'cat', fur:0x6f7078, sfx:'thud'},
+  bounty:  {name:'Bounty', ic:'🐈‍⬛', hp:480, speed:6.2, dmg:30, range:2.2, cd:0.75, r:0.7, hero:true, acquire:9, desc:'Der Theo unter den Katern. Jünger, neugieriger, schneller.', model:'cat', fur:0x8a8b93, sfx:'thud'},
+  adriana: {name:'Adriana', ic:'🎵', hp:220, speed:5, dmg:6, range:5, cd:1, r:0.5, hero:true, acquire:6, heal:14, desc:'Steht zwei Reihen weiter, mit der Selbstverständlichkeit von jemandem, der hier nicht zum ersten Mal ist. Heilt.', model:'pig', fur:0xb98a5a, fur2:0xf2ede4, sfx:'hat'},
+  susanna: {name:'Susanna', ic:'🎶', hp:220, speed:5, dmg:6, range:5, cd:1, r:0.5, hero:true, acquire:6, heal:14, desc:'Lacht kurz, echt, nicht höflich. Heilt.', model:'pig', fur:0x4a3426, fur2:0xd9c4a6, sfx:'hat'},
+  // Gegner
+  bote:    {name:'Zettel-Bote', ic:'📄', hp:70, speed:5.2, dmg:7, range:1.5, cd:1.0, r:0.42, acquire:9, team:2, bld:1.8, desc:'Licensing issues. Premises to be vacated by end of month.', model:'man', suit:0xcfc7b4, sfx:'paper'},
+  makler:  {name:'Makler', ic:'💼', hp:115, speed:4.2, dmg:12, range:7, cd:1.5, r:0.45, acquire:10, team:2, desc:'Erzählt von Potenzial. Meint Quadratmeterpreise.', model:'man', suit:0x2b3a4a, sfx:'paper', proj:0x9fd8ee},
+  inspektor:{name:'Inspektor', ic:'📋', hp:160, speed:4.0, dmg:11, range:5, cd:1.2, r:0.45, acquire:9, team:2, bld:1.5, desc:'Hygieneproblem, sagt er. Headquarter, sagt Theo.', model:'man', suit:0x5a6a4a, sfx:'paper', proj:0xdddddd},
+  bagger:  {name:'Bagger', ic:'🚜', hp:560, speed:2.5, dmg:48, range:2.4, cd:2.0, r:0.95, acquire:9, team:2, bld:1.8, desc:'Eigentumswohnungen, gebaut auf den Ruinen von Kellerbars.', model:'bagger', sfx:'thud'}
+};
+
+/* ---------- Spieldaten: Gebäude ---------- */
+const BUILDINGS = {
+  kaefig:   {name:'Käfig', ic:'🏠', hp:1600, size:3, cost:0, time:0, hq:true, dropoff:true, desc:'Heu. Stroh. Immer gleich. Hauptquartier und Grünkohl-Abgabe.'},
+  proberaum:{name:'Proberaum', ic:'🥁', hp:850, size:3, cost:150, time:18, trains:true, desc:'Es gab nie offizielle Bandproben. Hier entstehen Mäuse, Fans und Roadies.'},
+  buehne:   {name:'Bühne', ic:'🎤', hp:650, size:3, cost:200, time:22, ruf:1, desc:'Keine Palette, dreißig Zentimeter über dem Boden. Erzeugt Ruf.'},
+  heuturm:  {name:'Heuturm', ic:'🌾', hp:380, size:1, cost:90, time:9, turret:{dmg:12, range:8, cd:1.0, proj:0xe0b23a}, desc:'Theos Architektur. Türme ohne erkennbaren Zweck. Jetzt mit Zweck.'},
+  ampwall:  {name:'Verstärkerwand', ic:'🔈', hp:600, size:2, cost:180, time:15, req:'buehne', turret:{dmg:32, range:11, cd:2.2, proj:0xe6394a, aoe:1.6}, desc:'Lautsprecher, die zu laut betrieben werden. Fernverteidigung.'},
+  lager:    {name:'Grünkohl-Lager', ic:'🥬', hp:500, size:2, cost:120, time:11, dropoff:true, bonus:1.25, desc:'Wir brauchen mehr. Wir haben genug. Beim Grünkohl stimmt das nie. Abgabe mit Bonus.'},
+  // Gegner / Spezial
+  buero:    {name:'Immobilien-Büro', ic:'🏢', hp:2600, size:4, team:2, spawn:['bote','makler'], spawnEvery:40, desc:'Mieten steigen. Venues schließen. Nicht durch Skandale. Durch Zettel.'},
+  condo:    {name:'Eigentumswohnung', ic:'🏗️', hp:1250, size:3, team:2, spawn:['bote'], spawnEvery:40, desc:'Gebaut, weil der Boden plötzlich mehr wert war als alles, was je darauf passiert ist.'},
+  kran:     {name:'Baukran', ic:'🏗', hp:720, size:2, team:2, turret:{dmg:24, range:10, cd:2.0, proj:0x9fd8ee}, desc:'Bauantrag genehmigt.'},
+  amt:      {name:'Bauamt', ic:'🏛️', hp:1800, size:3, team:2, spawn:['inspektor','bote'], spawnEvery:45, desc:'Ein Zettel an einer Tür. Natürlich an einem Dienstag.'},
+  raum:     {name:'Raum ohne Namen', ic:'🚪', hp:1100, size:3, team:1, ruf:2, desc:'Kein Schild. Kein Logo. Nur eine Eisentür in einer Seitenstraße hinter dem Camden Market.'},
+  z7:       {name:'Z7', ic:'🎸', hp:3200, size:5, team:1, ruf:3, desc:'Die Wände der Z7 wussten, was sie gesehen hatten.'},
+  van:      {name:'Der Van', ic:'🚐', hp:900, size:2, team:1, desc:'Nach München. Spät im Programm, ein Freitagabend.'},
+  radio:    {name:'Das Radio', ic:'📻', hp:400, size:1, team:0, desc:'Von irgendwo im Haus. Nur die Gitarre spielte eine Rolle.'},
+  wald:     {name:'Waldrand', ic:'🌳', hp:9999, size:2, team:0, desc:'Die Luft war warm. Der Wald war still.'}
+};
+const PLAYER_BUILD = ['proberaum','buehne','heuturm','ampwall','lager'];
+const PLAYER_TRAIN = ['maus','fan','roadie'];
+
+/* ---------- Fähigkeiten der Helden ---------- */
+const ABILITIES = {
+  gurren:  {name:'Gurren', ic:'〰️', key:'G', ruf:25, cd:30, owner:'theo', tip:'Gurren (G): Heilt und beschleunigt alle in der Nähe. 25 Ruf.'},
+  fsucker: {name:'Fucker Sucker', ic:'🔥', key:'F', ruf:50, cd:40, owner:'theo', req:'fsucker', tip:'Fucker Sucker (F): Brennt sofort. 70 Schaden im Umkreis. Kein Mittelteil. 50 Ruf.'},
+  riff:    {name:'Der schwere Riff', ic:'🪨', key:'R', ruf:40, cd:35, owner:'john', tip:'Der schwere Riff (R): Jeder Ton ein Stein. 45 Schaden und 3 s Stillstand im Umkreis. 40 Ruf.'},
+  blick:   {name:'Der Blick', ic:'👁️', key:'B', ruf:30, cd:30, owner:'smokey', tip:'Der Blick (B): Registriert und für unwichtig befunden. Gegner im Umkreis fliehen 4 s. 30 Ruf.'}
+};
+
+/* ---------- Three.js: Szene, Kamera, Licht ---------- */
+const canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.75));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, 1, 1, 400);
+const cam = {x:0, z:0, yaw:Math.PI*0.25, dist:42, pitch:0.98, minD:16, maxD:80};
+const hemi = new THREE.HemisphereLight(0x8fa3c9, 0x2a2420, 0.55); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048); sun.shadow.camera.near=10; sun.shadow.camera.far=200; sun.shadow.bias=-0.0008;
+const sunTarget = new THREE.Object3D(); scene.add(sunTarget); sun.target = sunTarget; scene.add(sun);
+function updateCamera(){
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  camera.position.set(cam.x + Math.sin(cam.yaw)*cp*cam.dist, sp*cam.dist, cam.z + Math.cos(cam.yaw)*cp*cam.dist);
+  camera.lookAt(cam.x, 0, cam.z);
+  sun.position.set(cam.x+30, 60, cam.z+20); sunTarget.position.set(cam.x, 0, cam.z);
+  const s = 46 + cam.dist*0.5; sun.shadow.camera.left=-s; sun.shadow.camera.right=s; sun.shadow.camera.top=s; sun.shadow.camera.bottom=-s; sun.shadow.camera.updateProjectionMatrix();
+}
+function resize(){ const w=canvas.clientWidth||innerWidth, h=canvas.clientHeight||innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+/* ---------- Material-Cache & Hilfsgeometrien ---------- */
+const matCache = new Map();
+function mat(color, opts={}){ const k = color+'|'+JSON.stringify(opts); if(!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial(Object.assign({color, roughness:0.85, metalness:0.05}, opts))); return matCache.get(k); }
+const GEO = {
+  box: new THREE.BoxGeometry(1,1,1), sph: new THREE.SphereGeometry(1, 12, 10), cyl: new THREE.CylinderGeometry(1,1,1,10), cone: new THREE.ConeGeometry(1,1,7),
+  ring: new THREE.RingGeometry(0.8,1,32), plane: new THREE.PlaneGeometry(1,1)
+};
+function mesh(geo, m, sx=1,sy=1,sz=1, x=0,y=0,z=0, shadow=true){ const o=new THREE.Mesh(geo, m); o.scale.set(sx,sy,sz); o.position.set(x,y,z); o.castShadow=shadow; o.receiveShadow=shadow; return o; }
+function makeSign(text, w=256, h=64, fg='#f2ede4', bg='#141210', font='bold 30px Archivo Narrow, Arial Narrow, Arial'){
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const g=c.getContext('2d'); g.fillStyle=bg; g.fillRect(0,0,w,h); g.strokeStyle='#3a3632'; g.lineWidth=4; g.strokeRect(2,2,w-4,h-4);
+  g.fillStyle=fg; g.font=font; g.textAlign='center'; g.textBaseline='middle'; g.fillText(text, w/2, h/2+2);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=4; return new THREE.MeshBasicMaterial({map:t});
+}
+
+/* ---------- Modelle: Meerschweinchen, Mäuse, Kater, Bauamt ---------- */
+const Models = {
+  pig(fur=0x111111, fur2=null, curls=false, long=false){
+    const g = new THREE.Group();
+    const body = mesh(GEO.sph, mat(fur), 0.62, 0.52, 1.0, 0, 0.5, 0); g.add(body);
+    if (fur2){ const p = mesh(GEO.sph, mat(fur2), 0.5, 0.45, 0.55, 0.18, 0.56, -0.25); g.add(p); const p2 = mesh(GEO.sph, mat(fur2), 0.4, 0.4, 0.4, -0.2, 0.62, 0.35); g.add(p2); }
+    const head = mesh(GEO.sph, mat(fur), 0.42, 0.4, 0.48, 0, 0.6, 0.78); g.add(head);
+    if (fur2){ const hp = mesh(GEO.sph, mat(fur2), 0.26,0.26,0.26, 0.2, 0.7, 0.9); g.add(hp); }
+    const earM = mat(0x2a2224); g.add(mesh(GEO.sph, earM, 0.16,0.12,0.06, 0.3,0.86,0.68,false)); g.add(mesh(GEO.sph, earM, 0.16,0.12,0.06, -0.3,0.86,0.68,false));
+    const eye = mat(0x050505, {roughness:0.3}); g.add(mesh(GEO.sph, eye, 0.07,0.07,0.07, 0.24,0.7,1.1,false)); g.add(mesh(GEO.sph, eye, 0.07,0.07,0.07, -0.24,0.7,1.1,false));
+    g.add(mesh(GEO.sph, mat(0xd98a8a), 0.08,0.06,0.06, 0,0.58,1.24,false));
+    if (curls){ for(let i=0;i<7;i++){ const c=mesh(GEO.sph, mat(i%2?fur:(fur2||fur)), 0.15,0.12,0.15, (srand()-0.5)*0.7, 0.95+srand()*0.08, (srand()-0.5)*1.4, false); g.add(c);} }
+    if (long){ const sp = mat(0x161616); for(let i=0;i<9;i++){ const c=mesh(GEO.cone, sp, 0.1,0.55,0.1, (srand()-0.5)*0.9, 0.75, 0.3-(i*0.14), false); c.rotation.x = -2.2 - srand()*0.4; c.rotation.z=(srand()-0.5)*0.8; g.add(c);} }
+    g.add(mesh(GEO.sph, mat(0x3a2a24), 0.1,0.1,0.1, 0.3,0.1,0.4,false)); g.add(mesh(GEO.sph, mat(0x3a2a24), 0.1,0.1,0.1, -0.3,0.1,0.4,false));
+    return g;
+  },
+  john(){ seed=11; return this.pig(0xf2ede4, 0x141210, true, false); },
+  theo(){ seed=23; return this.pig(0x0e0e0e, null, false, true); },
+  maus(){
+    const g=new THREE.Group(); const fur=mat(0x7d7a74); g.add(mesh(GEO.sph, fur, 0.26,0.22,0.4, 0,0.22,0)); g.add(mesh(GEO.sph, fur, 0.18,0.18,0.22, 0,0.26,0.36));
+    const ear=mat(0xb59a96); g.add(mesh(GEO.sph, ear, 0.11,0.11,0.04, 0.13,0.42,0.3,false)); g.add(mesh(GEO.sph, ear, 0.11,0.11,0.04, -0.13,0.42,0.3,false));
+    const t=mesh(GEO.cyl, mat(0xb59a96), 0.03,0.6,0.03, 0,0.2,-0.6,false); t.rotation.x=Math.PI/2.4; g.add(t);
+    g.add(mesh(GEO.sph, mat(0x050505), 0.04,0.04,0.04, 0.07,0.3,0.55,false)); g.add(mesh(GEO.sph, mat(0x050505), 0.04,0.04,0.04, -0.07,0.3,0.55,false));
+    const leaf = mesh(GEO.sph, mat(0x3e7a2d), 0.22,0.14,0.22, 0,0.5,0.1, false); leaf.name='carry'; leaf.visible=false; g.add(leaf);
+    return g;
+  },
+  cat(fur=0x6f7078){
+    const g=new THREE.Group(); const f=mat(fur);
+    g.add(mesh(GEO.sph, f, 0.75,0.62,1.25, 0,0.72,0)); g.add(mesh(GEO.sph, f, 0.55,0.5,0.55, 0,1.05,0.95));
+    g.add(mesh(GEO.cone, f, 0.17,0.3,0.1, 0.3,1.5,0.95,false)); g.add(mesh(GEO.cone, f, 0.17,0.3,0.1, -0.3,1.5,0.95,false));
+    const eye=mat(0xd6a51e,{emissive:0x5a4300,roughness:0.3}); g.add(mesh(GEO.sph, eye, 0.09,0.09,0.06, 0.2,1.12,1.45,false)); g.add(mesh(GEO.sph, eye, 0.09,0.09,0.06, -0.2,1.12,1.45,false));
+    g.add(mesh(GEO.sph, mat(0x3a2a2a), 0.07,0.05,0.05, 0,0.98,1.5,false));
+    const legs=[[0.4,0.7],[-0.4,0.7],[0.4,-0.7],[-0.4,-0.7]]; legs.forEach(([x,z])=>g.add(mesh(GEO.cyl, f, 0.16,0.5,0.16, x,0.25,z)));
+    const tail=mesh(GEO.cyl, f, 0.1,1.3,0.1, 0,0.9,-1.4,false); tail.rotation.x=-0.9; g.add(tail);
+    return g;
+  },
+  man(suit=0xcfc7b4, paper=true){
+    const g=new THREE.Group(); const s=mat(suit);
+    g.add(mesh(GEO.box, s, 0.55,0.75,0.3, 0,1.05,0)); g.add(mesh(GEO.box, mat(0x3a3632), 0.2,0.65,0.22, 0.15,0.33,0)); g.add(mesh(GEO.box, mat(0x3a3632), 0.2,0.65,0.22, -0.15,0.33,0));
+    g.add(mesh(GEO.sph, mat(0xe3c3a3), 0.22,0.26,0.22, 0,1.65,0)); g.add(mesh(GEO.box, mat(0x2a2420), 0.46,0.1,0.46, 0,1.86,0,false));
+    g.add(mesh(GEO.box, s, 0.14,0.6,0.14, 0.36,1.05,0.05)); g.add(mesh(GEO.box, s, 0.14,0.6,0.14, -0.36,1.05,0.05));
+    if (paper){ const p=mesh(GEO.plane, new THREE.MeshBasicMaterial({color:0xffffff, side:THREE.DoubleSide}), 0.3,0.4,1, 0.4,0.95,0.3,false); p.rotation.y=0.3; g.add(p); }
+    else { g.add(mesh(GEO.box, mat(0x1a1612), 0.34,0.26,0.1, 0.45,0.75,0.1)); }
+    return g;
+  },
+  bagger(){
+    const g=new THREE.Group(); const y=mat(0xd9a521), dark=mat(0x2a2622);
+    g.add(mesh(GEO.box, dark, 1.9,0.45,0.6, 0.65,0.25,0)); g.add(mesh(GEO.box, dark, 1.9,0.45,0.6, -0.65,0.25,0));
+    g.add(mesh(GEO.box, y, 1.6,0.7,1.5, 0,0.85,-0.1)); g.add(mesh(GEO.box, mat(0x9fd8ee,{emissive:0x113344,roughness:0.2}), 0.8,0.6,0.7, 0.2,1.45,-0.2));
+    const arm=mesh(GEO.box, y, 0.3,0.3,1.8, 0,1.5,0.9); arm.rotation.x=-0.6; g.add(arm); const arm2=mesh(GEO.box, y, 0.28,0.28,1.4, 0,1.4,1.9); arm2.rotation.x=0.9; g.add(arm2);
+    g.add(mesh(GEO.box, dark, 0.8,0.5,0.6, 0,0.6,2.4));
+    return g;
+  },
+  fan(){
+    const g=this.man(0x151515, false); g.children.pop(); g.add(mesh(GEO.box, mat(0xc41e2a), 0.3,0.22,0.02, 0,1.1,0.17,false)); for(let i=0;i<4;i++) g.add(mesh(GEO.cone, mat(0xd0d0d0,{metalness:0.6,roughness:0.3}), 0.05,0.12,0.05, -0.2+i*0.13,1.5,0,false));
+    return g;
+  },
+  roadie(){
+    const g=this.man(0x2a2a2a, false); g.children.pop(); const amp=mesh(GEO.box, mat(0x111111), 0.7,0.55,0.4, 0,1.2,-0.4); g.add(amp); g.add(mesh(GEO.box, mat(0xe6394a,{emissive:0xe6394a,emissiveIntensity:0.7}), 0.08,0.08,0.03, 0.2,1.35,-0.62,false));
+    return g;
+  }
+};
+function buildUnitModel(def){
+  switch(def.model){
+    case 'john': return Models.john(); case 'theo': return Models.theo(); case 'maus': return Models.maus();
+    case 'cat': return Models.cat(def.fur); case 'man': return Models.man(def.suit, def.name==='Zettel-Bote'); case 'bagger': return Models.bagger();
+    case 'fan': return Models.fan(); case 'roadie': return Models.roadie();
+    case 'pig': seed=31; return Models.pig(def.fur, def.fur2, true, false);
+  }
+  return Models.pig();
+}
+
+/* ---------- Modelle: Gebäude ---------- */
+function buildBuildingModel(type, team){
+  const g=new THREE.Group(); const S=CELL*BUILDINGS[type].size; const half=S/2;
+  const add=(m)=>{g.add(m);return m;};
+  switch(type){
+    case 'kaefig': {
+      add(mesh(GEO.box, mat(0xd6b85a), S*0.92, 0.25, S*0.92, 0, 0.12, 0)); // Heu
+      const wire = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(S*0.96, 2.6, S*0.96)), new THREE.LineBasicMaterial({color:0xc9c9c9})); wire.position.y=1.3; g.add(wire);
+      for(let i=0;i<5;i++){ const bar=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(S*0.96,2.6)), new THREE.LineBasicMaterial({color:0x8c8c8c})); bar.position.set(0,1.3,-half*0.96+i*(S*0.96/4)); g.add(bar); }
+      add(mesh(GEO.box, mat(0x6b4a2a), 1.6,0.9,1.3, -half*0.4,0.65,-half*0.4)); // Häuschen
+      add(mesh(GEO.cyl, mat(0xbfe3ef,{transparent:true,opacity:0.7}), 0.18,1.2,0.18, half*0.7,1.2,half*0.7,false)); // Flasche
+      add(mesh(GEO.sph, mat(0x3e7a2d), 0.5,0.3,0.5, half*0.3,0.35,half*0.35,false)); // Grünkohl
+      break; }
+    case 'proberaum': {
+      add(mesh(GEO.box, mat(0x3a2f2a), S*0.95, 2.6, S*0.95, 0,1.3,0)); add(mesh(GEO.box, mat(0x1d1816), S*0.75, 0.3, S*0.75, 0,2.75,0));
+      add(mesh(GEO.box, mat(0xc41e2a), 1.0,1.8,0.12, 0,0.9,half*0.95)); // rote Tür
+      add(mesh(GEO.cyl, mat(0x111111), 0.9,0.6,0.9, -half*0.4,3.2,-half*0.3)); add(mesh(GEO.cyl, mat(0xe0b23a,{metalness:0.8,roughness:0.3}), 0.7,0.05,0.7, half*0.4,3.1,half*0.2)); // Drum + Becken
+      const sign=mesh(GEO.plane, makeSign('PROBERAUM'), 3.2,0.8,1, 0,2.2,half*0.95+0.08,false); add(sign); break; }
+    case 'buehne': {
+      add(mesh(GEO.box, mat(0x2a2420), S*0.96, 0.6, S*0.96, 0,0.3,0));
+      add(mesh(GEO.box, mat(0x0d0d0d), 1.2,2.6,1.2, -half*0.7,1.9,-half*0.5)); add(mesh(GEO.box, mat(0x0d0d0d), 1.2,2.6,1.2, half*0.7,1.9,-half*0.5));
+      [[-half*0.7,2.3],[half*0.7,2.3],[-half*0.7,1.4],[half*0.7,1.4]].forEach(([x,y])=>add(mesh(GEO.cyl, mat(0x4a4a4a), 0.36,0.1,0.36, x,y,-half*0.5+0.62,false)).rotation.x=Math.PI/2);
+      const truss=mesh(GEO.box, mat(0x555555,{metalness:0.7,roughness:0.4}), S*0.9, 0.18, 0.18, 0,4.2,-half*0.5); add(truss);
+      for(let i=0;i<3;i++){ const l=mesh(GEO.cone, mat(0xe6394a,{emissive:0xe6394a,emissiveIntensity:1.2}), 0.35,0.5,0.35, -half*0.6+i*half*0.6, 3.9, -half*0.5+0.1, false); l.rotation.x=Math.PI; add(l); }
+      add(mesh(GEO.cyl, mat(0x999999,{metalness:0.8}), 0.05,1.6,0.05, 0,1.4,half*0.3,false)); add(mesh(GEO.sph, mat(0x222222), 0.14,0.18,0.14, 0,2.25,half*0.3,false)); // Mikro
+      break; }
+    case 'heuturm': {
+      for(let i=0;i<4;i++){ const c=mesh(GEO.cyl, mat(i%2?0xd6b85a:0xc9a84a), 0.8-i*0.08,0.8,0.8-i*0.08, (srand()-0.5)*0.25, 0.4+i*0.78, (srand()-0.5)*0.25); c.rotation.z=(srand()-0.5)*0.15; add(c);} 
+      add(mesh(GEO.cone, mat(0x8a6a2a), 0.5,0.7,0.5, 0,3.6,0)); break; }
+    case 'ampwall': {
+      for(let i=0;i<2;i++) for(let j=0;j<2;j++){ add(mesh(GEO.box, mat(0x0e0e0e), 1.7,1.5,1.3, -0.9+i*1.8, 0.75+j*1.55, 0)); add(mesh(GEO.cyl, mat(0x333333), 0.5,0.1,0.5, -0.9+i*1.8, 0.75+j*1.55, 0.68,false)).rotation.x=Math.PI/2; add(mesh(GEO.box, mat(0xe6394a,{emissive:0xe6394a,emissiveIntensity:1}), 0.08,0.08,0.05, -0.3+i*1.8, 1.35+j*1.55, 0.68,false)); }
+      break; }
+    case 'lager': {
+      add(mesh(GEO.box, mat(0x4a3a2a), S*0.9,1.2,S*0.9, 0,0.6,0)); for(let i=0;i<6;i++) add(mesh(GEO.sph, mat(i%2?0x3e7a2d:0x4f8a3a), 0.7,0.5,0.7, (srand()-0.5)*2.2, 1.35+(i%3)*0.25, (srand()-0.5)*2.2, false));
+      break; }
+    case 'condo': {
+      add(mesh(GEO.box, mat(0xf0ebe3), S*0.9, 7, S*0.9, 0,3.5,0));
+      for(let f=0;f<3;f++){ add(mesh(GEO.box, mat(0x9fd8ee,{emissive:0x2a4a5a,roughness:0.15,metalness:0.3}), S*0.7, 1.2, 0.1, 0, 1.4+f*2.2, half*0.9+0.03, false)); add(mesh(GEO.box, mat(0xd8d2c8), S*0.5, 0.12, 0.8, 0, 0.8+f*2.2, half*0.9+0.4)); }
+      add(mesh(GEO.plane, makeSign('TO LET · SOLD', 256,64,'#0a0a0a','#f2ede4'), 3,0.75,1, 0,0.9,half*0.9+0.06,false)); break; }
+    case 'buero': {
+      add(mesh(GEO.box, mat(0x6fb6d6,{emissive:0x0f2a3a,roughness:0.1,metalness:0.5}), S*0.9, 10, S*0.9, 0,5,0));
+      for(let f=0;f<5;f++) add(mesh(GEO.box, mat(0x1a1a1a), S*0.92, 0.12, S*0.92, 0,2+f*2,0,false));
+      add(mesh(GEO.plane, makeSign('IMMOBILIEN', 256,64,'#f2ede4','#2b3a4a'), 5,1.2,1, 0,9,half*0.9+0.08,false)); break; }
+    case 'kran': {
+      add(mesh(GEO.box, mat(0x3a3632), S*0.8,0.6,S*0.8, 0,0.3,0)); add(mesh(GEO.box, mat(0xd9a521), 0.5,9,0.5, 0,4.8,0)); const arm=mesh(GEO.box, mat(0xd9a521), 7,0.35,0.35, 2.5,9.2,0); add(arm); add(mesh(GEO.box, mat(0x3a3632), 1,1,1, -1.6,9.2,0)); add(mesh(GEO.cyl, mat(0x999999), 0.03,4,0.03, 5,7.2,0,false)); add(mesh(GEO.box, mat(0x9fd8ee,{emissive:0x9fd8ee,emissiveIntensity:0.8}), 0.4,0.4,0.4, 5,5.1,0,false)); break; }
+    case 'amt': {
+      add(mesh(GEO.box, mat(0xbfb6a6), S*0.9, 4, S*0.9, 0,2,0)); add(mesh(GEO.box, mat(0x6b5f52), S*0.98, 0.5, S*0.98, 0,4.25,0)); for(let i=0;i<4;i++) add(mesh(GEO.cyl, mat(0xd8d0c0), 0.28,4,0.28, -half*0.6+i*half*0.4, 2, half*0.9+0.3));
+      add(mesh(GEO.plane, makeSign('BAUAMT', 256,64,'#0a0a0a','#e6dfd0'), 3.2,0.8,1, 0,3.3,half*0.9+0.08,false)); break; }
+    case 'raum': {
+      add(mesh(GEO.box, mat(0x2e2a28), S*0.95, 3.4, S*0.95, 0,1.7,0)); add(mesh(GEO.box, mat(0x050505,{roughness:0.4}), 1.1,2.2,0.15, 0,1.1,half*0.95)); // Eisentür
+      add(mesh(GEO.plane, makeSign('', 128,32,'#000','#111'), 2.6,0.5,1, 0,2.8,half*0.95+0.08,false)); // kein Schild
+      add(mesh(GEO.sph, mat(0xe0b23a,{emissive:0xe0b23a,emissiveIntensity:1}), 0.12,0.12,0.12, 0.9,2.4,half*0.95+0.1,false)); break; }
+    case 'z7': {
+      add(mesh(GEO.box, mat(0x1d1a18), S*0.95, 5, S*0.95, 0,2.5,0)); add(mesh(GEO.box, mat(0x151312), S*0.6, 1.5, S*0.6, 0,5.7,0));
+      add(mesh(GEO.plane, makeSign('Z7', 128,96,'#e6394a','#0a0a0a',"bold 68px 'Metal Mania', Impact"), 3.2,2.4,1, 0,3.6,half*0.95+0.08,false));
+      for(let i=0;i<5;i++) add(mesh(GEO.box, mat(0xe6394a,{emissive:0xe6394a,emissiveIntensity:1.1}), 0.3,0.3,0.1, -half*0.7+i*half*0.35, 1.2, half*0.95+0.08,false));
+      add(mesh(GEO.box, mat(0x0a0a0a), 2.2,2.4,0.2, 0,1.2,half*0.95+0.05)); break; }
+    case 'van': { add(mesh(GEO.box, mat(0x6a6f78), 3.6,1.6,1.8, 0,1.1,0)); add(mesh(GEO.box, mat(0x9fd8ee,{roughness:0.1}), 0.9,0.8,1.7, 1.7,1.4,0,false)); [[-1.1,0.8],[1.1,0.8],[-1.1,-0.8],[1.1,-0.8]].forEach(([x,z])=>{const w=mesh(GEO.cyl, mat(0x111111), 0.45,0.3,0.45, x,0.45,z); w.rotation.x=Math.PI/2; add(w);}); add(mesh(GEO.plane, makeSign('MÜNCHEN', 256,64,'#f2ede4','#2a2420'), 2.4,0.6,1, -0.4,1.3,0.92,false)); break; }
+    case 'radio': { add(mesh(GEO.box, mat(0x5a3a22), 1.4,0.8,0.7, 0,0.4,0)); add(mesh(GEO.cyl, mat(0x222222), 0.25,0.1,0.25, -0.35,0.45,0.36,false)).rotation.x=Math.PI/2; add(mesh(GEO.box, mat(0xe0b23a,{emissive:0xe0b23a,emissiveIntensity:1}), 0.5,0.18,0.05, 0.3,0.5,0.36,false)); add(mesh(GEO.cyl, mat(0xaaaaaa), 0.03,1.6,0.03, 0.5,1.4,-0.2,false)).rotation.z=0.3; break; }
+    case 'wald': { for(let i=0;i<7;i++){ const x=(srand()-0.5)*S*1.4, z=(srand()-0.5)*S*1.4; add(mesh(GEO.cyl, mat(0x4a3424), 0.18,1.2,0.18, x,0.6,z)); add(mesh(GEO.cone, mat(0x2f5a2a), 1.1,2.6,1.1, x,2.4,z)); } break; }
+  }
+  return g;
+}
+/* ---------- Welt: Raster, Terrain, Props ---------- */
+const TERRAIN = { // Farben pro Zellentyp
+  asphalt:[0x1e1d1b, 0x211f1d], cobble:[0x363028, 0x3a342c], grass:[0x2d4a26, 0x304d29], dirt:[0x4a3b2a, 0x4e3e2c], water:[0x15283a, 0x172b3e], block:[0x111111,0x111111], dry:[0x7a6a3e, 0x7e6e42], concrete:[0x44443f, 0x474742]
+};
+class World {
+  constructor(spec){
+    this.W=spec.w; this.H=spec.h; const n=this.W*this.H;
+    this.type = new Array(n).fill(spec.ground||'grass'); this.blocked=new Uint8Array(n); this.bld=new Array(n).fill(null);
+    this.group = new THREE.Group(); scene.add(this.group); this.props=[];
+    (spec.paint||[]).forEach(p=>this.paint(p));
+    for(let i=0;i<n;i++){ if(this.type[i]==='water'||this.type[i]==='block') this.blocked[i]=1; }
+    this.buildGround(); this.buildProps(spec);
+  }
+  idx(cx,cz){ return cz*this.W+cx; }
+  inb(cx,cz){ return cx>=0&&cz>=0&&cx<this.W&&cz<this.H; }
+  toWorld(cx,cz){ return [ (cx-this.W/2+0.5)*CELL, (cz-this.H/2+0.5)*CELL ]; }
+  toCell(x,z){ return [ Math.floor(x/CELL+this.W/2), Math.floor(z/CELL+this.H/2) ]; }
+  paint(p){ // {t:'asphalt', x,z,w,h} oder {t, x1,z1,x2,z2,w:breite} Straße
+    if (p.x1!==undefined){ const steps=Math.max(Math.abs(p.x2-p.x1),Math.abs(p.z2-p.z1)); for(let s=0;s<=steps;s++){ const cx=Math.round(lerp(p.x1,p.x2,s/steps)), cz=Math.round(lerp(p.z1,p.z2,s/steps)); const r=Math.floor((p.w||3)/2); for(let dx=-r;dx<=r;dx++) for(let dz=-r;dz<=r;dz++){ if(this.inb(cx+dx,cz+dz)) this.type[this.idx(cx+dx,cz+dz)]=p.t; } } }
+    else { for(let cx=p.x;cx<p.x+p.w;cx++) for(let cz=p.z;cz<p.z+p.h;cz++){ if(this.inb(cx,cz)) this.type[this.idx(cx,cz)]=p.t; } }
+  }
+  buildGround(){
+    const n=this.W*this.H; const pos=new Float32Array(n*18), col=new Float32Array(n*18); const c=new THREE.Color(); let k=0;
+    for(let cz=0;cz<this.H;cz++) for(let cx=0;cx<this.W;cx++){
+      const t=this.type[this.idx(cx,cz)]; const pal=TERRAIN[t]||TERRAIN.grass; c.setHex(pal[(cx+cz)%2]); const v=(srand()-0.5)*0.06; c.r=clamp(c.r+v,0,1); c.g=clamp(c.g+v,0,1); c.b=clamp(c.b+v,0,1);
+      const x0=(cx-this.W/2)*CELL, z0=(cz-this.H/2)*CELL, x1=x0+CELL, z1=z0+CELL; const y = t==='water'?-0.25:0;
+      const quad=[x0,y,z0, x0,y,z1, x1,y,z1,  x0,y,z0, x1,y,z1, x1,y,z0];
+      for(let i=0;i<18;i++){ pos[k+i]=quad[i]; } for(let i=0;i<6;i++){ col[k+i*3]=c.r; col[k+i*3+1]=c.g; col[k+i*3+2]=c.b; } k+=18;
+    }
+    const geo=new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos,3)); geo.setAttribute('color', new THREE.BufferAttribute(col,3)); geo.computeVertexNormals();
+    this.ground=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.95})); this.ground.receiveShadow=true; this.group.add(this.ground);
+    // Rand: dunkle Fläche darunter, damit die Karte nicht im Nichts schwebt
+    const rim=mesh(GEO.plane, new THREE.MeshBasicMaterial({color:0x060606}), this.W*CELL*4, this.H*CELL*4, 1, 0,-0.6,0,false); rim.rotation.x=-Math.PI/2; this.group.add(rim);
+  }
+  buildProps(spec){
+    // Häuserblöcke (block-Zellen) als Reihenhäuser mit Fenstern; Bäume auf Gras; Laternen an Asphaltkanten
+    const done=new Uint8Array(this.W*this.H);
+    for(let cz=0;cz<this.H;cz++) for(let cx=0;cx<this.W;cx++){
+      const i=this.idx(cx,cz); if(this.type[i]!=='block'||done[i]) continue;
+      let w=1; while(cx+w<this.W && this.type[this.idx(cx+w,cz)]==='block' && !done[this.idx(cx+w,cz)] && w<6) w++;
+      let h=1; outer: while(cz+h<this.H && h<4){ for(let dx=0;dx<w;dx++) if(this.type[this.idx(cx+dx,cz+h)]!=='block'||done[this.idx(cx+dx,cz+h)]) break outer; h++; }
+      for(let dx=0;dx<w;dx++) for(let dz=0;dz<h;dz++) done[this.idx(cx+dx,cz+dz)]=1;
+      const [x,z]=this.toWorld(cx,cz); const bx=x-CELL/2+w*CELL/2, bz=z-CELL/2+h*CELL/2; const ht=3+srand()*4;
+      const brick=spec.brick||0x4a3328; const b=mesh(GEO.box, mat(brick), w*CELL-0.2, ht, h*CELL-0.2, bx, ht/2, bz); this.group.add(b);
+      const roof=mesh(GEO.box, mat(0x2a2522), w*CELL+0.2, 0.3, h*CELL+0.2, bx, ht+0.15, bz); this.group.add(roof);
+      const win=mat(0xe0b23a,{emissive:0xe0b23a,emissiveIntensity:0.9}); const winOff=mat(0x1a1a1a);
+      for(let f=0;f<Math.floor(ht/1.6);f++) for(let k=0;k<w*2;k++){ if(srand()<0.3) continue; const m=mesh(GEO.box, srand()<0.55?win:winOff, 0.5,0.7,0.06, bx-w*CELL/2+0.6+k*0.95, 1.0+f*1.6, bz+h*CELL/2-0.08, false); this.group.add(m); }
+    }
+    // Bäume & Laternen
+    const treeM=mat(spec.tree||0x2f5a2a), trunk=mat(0x4a3424), lampM=mat(0xfff1c0,{emissive:0xfff1c0,emissiveIntensity:1.4});
+    for(let cz=0;cz<this.H;cz++) for(let cx=0;cx<this.W;cx++){
+      const i=this.idx(cx,cz); const t=this.type[i]; const [x,z]=this.toWorld(cx,cz);
+      if ((t==='grass'||t==='dry') && srand()<(spec.treeDensity||0.05) && !this.near(cx,cz,'block',1)){ const s=0.7+srand()*0.7; const tr=mesh(GEO.cyl, trunk, 0.15,1.2*s,0.15, x+(srand()-0.5), 0.6*s, z+(srand()-0.5)); this.group.add(tr); const cr=mesh(GEO.cone, treeM, 0.9*s, 2.2*s, 0.9*s, tr.position.x, 1.9*s, tr.position.z); this.group.add(cr); }
+      if ((t==='asphalt'||t==='cobble') && (cx+cz)%7===0 && this.near(cx,cz,'block',1) && srand()<0.5){ const p=mesh(GEO.cyl, mat(0x222222), 0.07,3.2,0.07, x,1.6,z,false); this.group.add(p); const l=mesh(GEO.sph, lampM, 0.22,0.22,0.22, x,3.2,z,false); this.group.add(l); }
+      if (t==='asphalt' && srand()<0.04){ const pud=mesh(GEO.plane, new THREE.MeshStandardMaterial({color:0x0e1a26, roughness:0.05, metalness:0.6}), 1.2+srand(),0.8+srand(),1, x,0.02,z,false); pud.rotation.x=-Math.PI/2; this.group.add(pud); }
+    }
+    (spec.signs||[]).forEach(s=>{ const [x,z]=this.toWorld(s.x,s.z); const m=mesh(GEO.plane, makeSign(s.text, 384,64, s.fg||'#f2ede4', s.bg||'#141210'), 5,0.85,1, x, s.y||2.6, z, false); m.rotation.y=s.rot||0; this.group.add(m); });
+  }
+  near(cx,cz,t,r){ for(let dx=-r;dx<=r;dx++) for(let dz=-r;dz<=r;dz++){ if(this.inb(cx+dx,cz+dz)&&this.type[this.idx(cx+dx,cz+dz)]===t) return true; } return false; }
+  free(cx,cz){ return this.inb(cx,cz) && !this.blocked[this.idx(cx,cz)]; }
+  nearestFree(cx,cz,maxR=8){ if(this.free(cx,cz)) return [cx,cz]; for(let r=1;r<=maxR;r++) for(let dx=-r;dx<=r;dx++) for(let dz=-r;dz<=r;dz++){ if(Math.max(Math.abs(dx),Math.abs(dz))!==r) continue; if(this.free(cx+dx,cz+dz)) return [cx+dx,cz+dz]; } return [cx,cz]; }
+  dispose(){ scene.remove(this.group); this.group.traverse(o=>{ if(o.geometry && o.geometry!==GEO.box && !Object.values(GEO).includes(o.geometry)) o.geometry.dispose(); }); }
+}
+
+/* ---------- A*-Wegsuche mit Binärheap ---------- */
+class Heap { constructor(){this.a=[];} push(n){ const a=this.a; a.push(n); let i=a.length-1; while(i>0){ const p=(i-1)>>1; if(a[p].f<=a[i].f) break; [a[p],a[i]]=[a[i],a[p]]; i=p; } } pop(){ const a=this.a; const top=a[0]; const last=a.pop(); if(a.length){ a[0]=last; let i=0; for(;;){ const l=2*i+1,r=l+1; let m=i; if(l<a.length&&a[l].f<a[m].f) m=l; if(r<a.length&&a[r].f<a[m].f) m=r; if(m===i) break; [a[m],a[i]]=[a[i],a[m]]; i=m; } } return top; } get size(){return this.a.length;} }
+function findPath(world, sx,sz, tx,tz, maxIter=6000){
+  if(!world.inb(sx,sz)) return null; [tx,tz]=world.nearestFree(tx,tz,6); const W=world.W; const goal=world.idx(tx,tz);
+  const g=new Map(), came=new Map(); const open=new Heap(); const start=world.idx(sx,sz); g.set(start,0); open.push({i:start,f:0}); const closed=new Set();
+  const h=(i)=>{ const dx=Math.abs((i%W)-tx), dz=Math.abs(Math.floor(i/W)-tz); return Math.max(dx,dz)+0.41*Math.min(dx,dz); };
+  let it=0, best=start, bestH=h(start);
+  while(open.size && it++<maxIter){
+    const cur=open.pop().i; if(cur===goal){ best=cur; break; } if(closed.has(cur)) continue; closed.add(cur);
+    const hh=h(cur); if(hh<bestH){bestH=hh;best=cur;}
+    const cx=cur%W, cz=Math.floor(cur/W);
+    for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++){
+      if(!dx&&!dz) continue; const nx=cx+dx, nz=cz+dz; if(!world.free(nx,nz)) continue;
+      if(dx&&dz && (!world.free(cx+dx,cz)||!world.free(cx,cz+dz))) continue; // keine Ecken schneiden
+      const ni=world.idx(nx,nz); const ng=g.get(cur)+((dx&&dz)?1.414:1); if(ng<(g.get(ni)??Infinity)){ g.set(ni,ng); came.set(ni,cur); open.push({i:ni,f:ng+h(ni)}); }
+    }
+  }
+  const path=[]; let c=best; while(c!==start){ path.push(c); c=came.get(c); if(c===undefined) break; } path.reverse();
+  return path.map(i=>world.toWorld(i%W, Math.floor(i/W)));
+}
+
+/* ---------- Entities ---------- */
+let game=null; // aktuelle Partie
+let nextId=1;
+class Entity {
+  constructor(){ this.id=nextId++; this.dead=false; this.team=0; this.hp=1; this.maxHp=1; this.x=0; this.z=0; this.isBuilding=false; }
+  get alive(){ return !this.dead; }
+}
+class Unit extends Entity {
+  constructor(type, team, x, z){
+    super(); this.type=type; this.def=UNITS[type]; this.team=team; this.x=x; this.z=z; this.maxHp=this.def.hp; this.hp=this.maxHp;
+    this.r=this.def.r; this.speed=this.def.speed; this.path=null; this.target=null; this.attackTarget=null; this.cd=0; this.scanT=rnd(0.3); this.state='idle'; this.stun=0; this.flee=0;
+    this.carry=0; this.kale=null; this.gatherT=0; this.attackMove=false; this.deathT=0; this.buff=0; this.facing=rnd(Math.PI*2); this.bob=rnd(10); this.cooldowns={};
+    this.mesh=buildUnitModel(this.def); this.mesh.position.set(x,0,z); scene.add(this.mesh);
+    this.ring=new THREE.Mesh(GEO.ring, new THREE.MeshBasicMaterial({color: team===1?0xe6394a:team===2?0x3aa0c8:0x8a8580, side:THREE.DoubleSide, transparent:true, opacity:0.9})); this.ring.rotation.x=-Math.PI/2; this.ring.position.y=0.04; this.ring.scale.setScalar(this.r*1.9); this.ring.visible=false; this.mesh.add(this.ring);
+    this.hpBar=makeHpBar(this.r*2.2, (this.def.hero?1.5:1.0)+this.r*0.8); this.mesh.add(this.hpBar.g);
+  }
+  orderMove(x,z,attackMove=false){ this.attackMove=attackMove; this.attackTarget=null; this.kale=null; this.state='move'; this.dest={x,z}; this.replan(); }
+  orderAttack(e){ this.attackTarget=e; this.state='attack'; this.kale=null; this.path=null; }
+  orderHarvest(k){ if(!this.def.harvester) { this.orderMove(k.x,k.z); return; } this.kale=k; this.attackTarget=null; this.state='harvest'; this.path=null; }
+  orderStop(){ this.state='idle'; this.path=null; this.attackTarget=null; this.dest=null; this.attackMove=false; }
+  replan(){ const w=game.world; const [sx,sz]=w.toCell(this.x,this.z); const [tx,tz]=w.toCell(this.dest.x,this.dest.z); const p=findPath(w,sx,sz,tx,tz); this.path = p&&p.length? p : []; if(this.path.length){ this.path[this.path.length-1]=[this.dest.x,this.dest.z]; } else this.path=[[this.dest.x,this.dest.z]]; }
+  distTo(e){ if(e.isBuilding){ const hx=e.size*CELL/2, hz=hx; const px=clamp(this.x,e.x-hx,e.x+hx), pz=clamp(this.z,e.z-hz,e.z+hz); return Math.sqrt(dist2(this.x,this.z,px,pz)); } return Math.sqrt(dist2(this.x,this.z,e.x,e.z)) - e.r; }
+  damage(d, from){ if(this.dead) return; this.hp-=d; if(this.hp<=0){ this.die(from); } }
+  die(from){ this.dead=true; this.deathT=0.8; game.onDeath(this, from); }
+  update(dt){
+    if(this.dead){ this.deathT-=dt; this.mesh.scale.setScalar(Math.max(0.01,this.deathT/0.8)); this.mesh.position.y -= dt*0.6; if(this.deathT<=0) this.remove(); return; }
+    const def=this.def; this.cd-=dt; this.stun=Math.max(0,this.stun-dt); this.flee=Math.max(0,this.flee-dt); this.buff=Math.max(0,this.buff-dt);
+    for(const k in this.cooldowns) this.cooldowns[k]=Math.max(0,this.cooldowns[k]-dt);
+    if(this.stun>0){ this.sync(dt,false); return; }
+    let spd=this.speed; let dmgMul=1;
+    if(this.team===1 && this.type!=='theo'){ const th=game.theo; if(th&&th.alive&&UNITS.theo.aura&&dist2(this.x,this.z,th.x,th.z)<UNITS.theo.aura.radius**2){ spd*=UNITS.theo.aura.speed; dmgMul*=UNITS.theo.aura.dmg; } }
+    if(this.buff>0){ spd*=1.3; }
+    if(this.team===1 && game.mission.heat){ const h=game.heat||0; if(this.type==='john') spd*= Math.max(0.35, 1-h*0.8); }
+    // Flucht (Smokeys Blick)
+    if(this.flee>0){ const sm=game.units.find(u=>u.type==='smokey'&&u.alive); if(sm){ const dx=this.x-sm.x, dz=this.z-sm.z; const l=Math.hypot(dx,dz)||1; this.stepTo(this.x+dx/l*4, this.z+dz/l*4, spd*1.2, dt, true); } this.sync(dt,true); return; }
+    // Ziele suchen
+    this.scanT-=dt;
+    if(this.scanT<=0){ this.scanT=0.3;
+      if((this.state==='idle'||this.attackMove||(this.state==='attack'&&(!this.attackTarget||this.attackTarget.dead))) && def.acquire>0){
+        const e=game.nearestEnemy(this, def.acquire); if(e){ this.attackTarget=e; if(this.state==='idle') this.state='attack'; else if(this.attackMove) this.state='attack'; }
+        else if(this.state==='attack' && this.attackMove){ this.state='move'; }
+      }
+      if(this.state==='attack' && this.attackTarget && this.attackTarget.dead){ this.attackTarget=null; if(this.attackMove){ this.state='move'; } else this.state='idle'; }
+      if(this.def.heal && this.team===1){ const ally=game.units.find(u=>u.team===1&&u.alive&&u!==this&&u.hp<u.maxHp*0.8&&dist2(u.x,u.z,this.x,this.z)<def.range**2); if(ally&&this.cd<=0){ ally.hp=Math.min(ally.maxHp, ally.hp+def.heal); this.cd=def.cd; fx.heal(ally.x,ally.z); } }
+    }
+    if(this.state==='attack' && this.attackTarget && !this.attackTarget.dead){
+      const t=this.attackTarget; const d=this.distTo(t);
+      if(d<=def.range){ this.path=null; this.face(t.x,t.z); if(this.cd<=0){ this.cd=def.cd; this.attack(t, dmgMul); } }
+      else { if(!this.path || this.pathT<=0){ this.dest={x:t.x,z:t.z}; this.replan(); this.pathT=0.8; } this.pathT-=dt; this.followPath(spd,dt); }
+    }
+    else if(this.state==='harvest'){ this.harvest(dt, spd); }
+    else if(this.state==='move'){ if(this.followPath(spd,dt)){ this.state='idle'; this.attackMove=false; } }
+    else if(this.state==='return'){ this.returnKale(dt,spd); }
+    this.sync(dt, this.state!=='idle');
+  }
+  attack(t, mul){
+    const def=this.def; const dmg=def.dmg*mul*(t.isBuilding&&def.bld?def.bld:1);
+    if(def.range>3 && def.proj!==undefined){ game.projectile(this.x,this.z,1.1, t, dmg, def.proj, def.aoe||0, this); }
+    else if(def.aoe){ fx.wave(t.x,t.z,def.aoe, 0xe6394a); game.areaDamage(t.x,t.z,def.aoe,dmg,this.team,this); }
+    else t.damage(dmg, this);
+    const s=def.sfx; if(s==='chord') Audio.chord(this.type==='john'?[82.4,123.5]:[110,164.8],0.35,this.type==='john'?0.5:0.25); else if(s==='hat') Audio.hat(0.15); else if(s==='paper') Audio.paper(); else if(s==='thud') Audio.thud(); else if(s==='squeak') Audio.squeak();
+    if(!t.isBuilding && !def.aoe) fx.hit(t.x,t.z, this.team===1?0xe6394a:0x9fd8ee);
+  }
+  harvest(dt, spd){
+    const k=this.kale;
+    if(!k||k.amount<=0){ this.kale=game.nearestKale(this.x,this.z); if(!this.kale){ if(this.carry>0) this.state='return'; else this.state='idle'; return; } return; }
+    const d=Math.sqrt(dist2(this.x,this.z,k.x,k.z));
+    if(d>1.6){ if(!this.path){ this.dest={x:k.x,z:k.z}; this.replan(); } if(this.followPath(spd,dt)) this.path=null; return; }
+    this.face(k.x,k.z); this.gatherT+=dt; if(this.gatherT>0.5){ this.gatherT=0; const take=Math.min(3,k.amount,this.def.carry-this.carry); k.take(take); this.carry+=take; if(this.carry>=this.def.carry||k.amount<=0){ this.state='return'; this.path=null; } }
+  }
+  returnKale(dt,spd){
+    const d=game.nearestDropoff(this.x,this.z); if(!d){ this.state='idle'; return; }
+    const dd=this.distTo(d);
+    if(dd>1.2){ if(!this.path){ this.dest={x:d.x,z:d.z}; this.replan(); this.pathT=1.5; } this.pathT-=dt; if(this.followPath(spd,dt)||this.pathT<=0) this.path=null; return; }
+    const bonus=d.def.bonus||1; game.addKale(Math.round(this.carry*bonus)); this.carry=0; this.path=null; this.state='harvest'; if(!this.kale||this.kale.amount<=0) this.kale=game.nearestKale(this.x,this.z);
+  }
+  followPath(spd,dt){
+    if(!this.path||!this.path.length) return true;
+    const [tx,tz]=this.path[0]; const d=Math.hypot(tx-this.x,tz-this.z); const last=this.path.length===1;
+    if(d<(last?0.35:0.7)){ this.path.shift(); if(!this.path.length){ this.path=null; return true; } return false; }
+    this.stepTo(tx,tz,spd,dt,false); return false;
+  }
+  stepTo(tx,tz,spd,dt,ignoreBlock){
+    const dx=tx-this.x, dz=tz-this.z; const l=Math.hypot(dx,dz)||1; const s=Math.min(l, spd*dt); let nx=this.x+dx/l*s, nz=this.z+dz/l*s;
+    const w=game.world; const [cx,cz]=w.toCell(nx,nz); if(!ignoreBlock && !w.free(cx,cz)){ // an Hindernis entlang rutschen
+      const [cx2,cz2]=w.toCell(nx,this.z); if(w.free(cx2,cz2)) nz=this.z; else { const [cx3,cz3]=w.toCell(this.x,nz); if(w.free(cx3,cz3)) nx=this.x; else { nx=this.x; nz=this.z; this.pathT=0; } }
+    }
+    this.x=nx; this.z=nz; this.face(tx,tz);
+  }
+  face(tx,tz){ this.facing=Math.atan2(tx-this.x, tz-this.z); }
+  sync(dt, moving){
+    const m=this.mesh; m.position.x=this.x; m.position.z=this.z; let a=this.facing-m.rotation.y; a=Math.atan2(Math.sin(a),Math.cos(a)); m.rotation.y+=a*Math.min(1,dt*10);
+    this.bob+=dt*(moving?14:3); m.position.y = moving? Math.abs(Math.sin(this.bob))*0.08 : 0; if(this.stun>0) m.rotation.z=Math.sin(this.bob*2)*0.1; else m.rotation.z=0;
+    const c=m.getObjectByName('carry'); if(c) c.visible=this.carry>0;
+    this.hpBar.set(this.hp/this.maxHp, this.team); this.hpBar.g.visible = this.selected || this.hp<this.maxHp;
+    this.ring.visible=!!this.selected; if(this.buff>0){ this.ring.visible=true; this.ring.material.opacity=0.5+0.4*Math.sin(this.bob*3); } else this.ring.material.opacity=0.9;
+  }
+  remove(){ scene.remove(this.mesh); this.removed=true; }
+}
+class Building extends Entity {
+  constructor(type, team, cx, cz, built=true){
+    super(); this.type=type; this.def=BUILDINGS[type]; this.team=team!==undefined?team:(this.def.team||1); this.size=this.def.size; this.cx=cx; this.cz=cz; const [x,z]=game.world.toWorld(cx,cz); this.x=x+ (this.size%2?0:CELL/2); this.z=z+(this.size%2?0:CELL/2);
+    this.isBuilding=true; this.maxHp=this.def.hp; this.progress=built?1:0; this.hp=built?this.maxHp:this.maxHp*0.1; this.cd=0; this.spawnT=(this.def.spawnEvery||30)*0.6; this.rufT=0; this.deathT=0; this.r=this.size*CELL/2;
+    this.mesh=buildBuildingModel(type,this.team); this.mesh.position.set(this.x,0,this.z); scene.add(this.mesh); if(!built) this.mesh.scale.y=0.05;
+    this.ring=new THREE.Mesh(GEO.ring, new THREE.MeshBasicMaterial({color:this.team===1?0xe6394a:this.team===2?0x3aa0c8:0xe0b23a, side:THREE.DoubleSide})); this.ring.rotation.x=-Math.PI/2; this.ring.position.y=0.05; this.ring.scale.setScalar(this.r*1.25); this.ring.visible=false; this.mesh.add(this.ring);
+    this.hpBar=makeHpBar(this.size*CELL*0.8, 1.2); this.hpBar.g.position.y = this.size*1.6 + (type==='buero'?8:type==='condo'?6:type==='kran'?8:type==='z7'?5:1.5); this.mesh.add(this.hpBar.g);
+    this.occupy(true);
+  }
+  footprint(){ const r=Math.floor(this.size/2); const cells=[]; const sx=this.size%2?this.cx-r:this.cx-r+1, sz=this.size%2?this.cz-r:this.cz-r+1; for(let dx=0;dx<this.size;dx++) for(let dz=0;dz<this.size;dz++) cells.push([sx+dx, sz+dz]); return cells; }
+  occupy(on){ const w=game.world; this.footprint().forEach(([cx,cz])=>{ if(w.inb(cx,cz)){ w.blocked[w.idx(cx,cz)]=on?1:0; w.bld[w.idx(cx,cz)]=on?this:null; } }); }
+  damage(d, from){ if(this.dead) return; this.hp-=d; if(from&&!from.dead) game.defend(this, from); if(this.hp<=0) this.die(from); }
+  die(from){ this.dead=true; this.deathT=1.0; this.occupy(false); game.onDeath(this, from); fx.wave(this.x,this.z,this.r*1.5,0xe0b23a); }
+  update(dt){
+    if(this.dead){ this.deathT-=dt; this.mesh.scale.y=Math.max(0.02,this.deathT); this.mesh.rotation.z+=dt*0.3; if(this.deathT<=0) this.remove(); return; }
+    if(this.progress<1){ this.progress=Math.min(1,this.progress+dt/Math.max(1,this.def.time)); this.hp=Math.min(this.maxHp, this.hp+dt/Math.max(1,this.def.time)*this.maxHp*0.9); this.mesh.scale.y=0.05+0.95*this.progress; if(this.progress>=1){ game.log(`${this.def.name} fertig.`); game.onBuilt(this); } return; }
+    const def=this.def; this.cd-=dt;
+    if(def.turret){ this.scanT=(this.scanT||0)-dt; if(this.scanT<=0){ this.scanT=0.3; if(!this.target||this.target.dead||this.distTo(this.target)>def.turret.range) this.target=game.nearestEnemy(this, def.turret.range); }
+      if(this.target&&!this.target.dead&&this.cd<=0){ this.cd=def.turret.cd; game.projectile(this.x,this.z,2.5,this.target,def.turret.dmg,def.turret.proj,def.turret.aoe||0,this); if(this.type==='ampwall') Audio.chord([65.4,98],0.3,0.3); } }
+    if(def.spawn && this.team===2 && game.mission.enemyActive){ this.spawnT-=dt; if(this.spawnT<=0){ this.spawnT=def.spawnEvery*(game.mission.spawnMul||1); const n=game.units.filter(u=>u.team===2&&u.alive).length; if(n<(game.mission.enemyCap||18)){ const t=def.spawn[Math.floor(Math.random()*def.spawn.length)]; const u=game.spawnUnit(t,2,this.x,this.z+this.r+1); if(u){ const tgt=game.playerTarget(); if(tgt) u.orderMove(tgt.x,tgt.z,true); } } } }
+    if(def.ruf && this.team===1){ this.rufT+=dt; if(this.rufT>=2){ this.rufT-=2; game.addRuf(def.ruf); } }
+    this.hpBar.set(this.hp/this.maxHp,this.team); this.hpBar.g.visible=this.selected||this.hp<this.maxHp; this.ring.visible=!!this.selected;
+  }
+  distTo(e){ return Math.sqrt(dist2(this.x,this.z,e.x,e.z)); }
+  remove(){ scene.remove(this.mesh); this.removed=true; }
+}
+class Kale { // Grünkohl-Feld
+  constructor(cx,cz,amount){ const [x,z]=game.world.toWorld(cx,cz); this.x=x; this.z=z; this.cx=cx; this.cz=cz; this.amount=amount; this.max=amount; this.g=new THREE.Group(); this.g.position.set(x,0,z); scene.add(this.g); seed=cx*31+cz; for(let i=0;i<7;i++){ const l=mesh(GEO.sph, mat(i%2?0x2f6a24:0x3e7a2d), 0.45,0.3,0.45, (srand()-0.5)*1.8, 0.2+srand()*0.2, (srand()-0.5)*1.8); l.rotation.set(srand(),srand(),srand()); this.g.add(l);} this.dead=false; }
+  take(n){ this.amount=Math.max(0,this.amount-n); const s=0.35+0.65*this.amount/this.max; this.g.scale.set(s,s,s); if(this.amount<=0){ this.dead=true; this.g.visible=false; } }
+  remove(){ scene.remove(this.g); }
+}
+function makeHpBar(w,h){ const g=new THREE.Group(); const bg=mesh(GEO.box, new THREE.MeshBasicMaterial({color:0x1a1a1a}), w,0.12,0.02, 0,0,0,false); const fg=mesh(GEO.box, new THREE.MeshBasicMaterial({color:0x7fc45c}), w,0.1,0.03, 0,0,0.01,false); g.add(bg); g.add(fg); g.position.y=h; g.visible=false;
+  return {g, set(p,team){ fg.scale.x=Math.max(0.001,p); fg.position.x=-w*(1-p)/2; fg.material.color.setHex(p<0.3?0xe6394a:p<0.6?0xe0b23a:(team===2?0x9fd8ee:0x7fc45c)); g.quaternion.copy(camera.quaternion); }}; }
+
+/* ---------- Effekte (Ringe, Treffer, Projektile) ---------- */
+const fx = {
+  list:[],
+  wave(x,z,r,color){ const m=new THREE.Mesh(GEO.ring, new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.8, side:THREE.DoubleSide})); m.rotation.x=-Math.PI/2; m.position.set(x,0.08,z); m.scale.setScalar(0.3); scene.add(m); this.list.push({m,t:0,life:0.5,r}); },
+  hit(x,z,color){ const m=mesh(GEO.sph, new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.9}), 0.25,0.25,0.25, x,0.8,z,false); scene.add(m); this.list.push({m,t:0,life:0.25,r:0.9,up:true}); },
+  heal(x,z){ this.wave(x,z,1.2,0x7fc45c); },
+  text(x,z,txt,color='#f2ede4'){ const c=document.createElement('canvas'); c.width=256; c.height=64; const g=c.getContext('2d'); g.font="bold 36px 'Archivo Narrow', Arial Narrow, Arial"; g.textAlign='center'; g.fillStyle=color; g.shadowColor='#000'; g.shadowBlur=6; g.fillText(txt,128,44); const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t, transparent:true})); s.scale.set(4,1,1); s.position.set(x,2.2,z); scene.add(s); this.list.push({m:s,t:0,life:1.4,r:1,up:true,txt:true}); },
+  update(dt){ for(let i=this.list.length-1;i>=0;i--){ const e=this.list[i]; e.t+=dt; const p=e.t/e.life; if(e.txt){ e.m.position.y+=dt*1.2; e.m.material.opacity=1-p; } else if(e.up){ e.m.position.y+=dt*2; e.m.material.opacity=1-p; } else { e.m.scale.setScalar(0.3+e.r*p*1.1); e.m.material.opacity=0.8*(1-p); } if(p>=1){ scene.remove(e.m); if(e.m.material.map) e.m.material.map.dispose(); e.m.material.dispose(); this.list.splice(i,1); } } },
+  clear(){ this.list.forEach(e=>scene.remove(e.m)); this.list=[]; }
+};
+/* ---------- Partie: Zustand, Befehle, Gegner-KI ---------- */
+class Game {
+  constructor(mission){
+    game=this; this.mission=mission; this.units=[]; this.buildings=[]; this.kales=[]; this.projs=[]; this.kale=mission.startKale||0; this.ruf=mission.startRuf||0; this.time=0; this.selected=[]; this.over=false; this.speed=1;
+    this.msgQueue=[]; this.msgT=0; this.waveIdx=0; this.objectives=mission.objectives.map(o=>Object.assign({done:false},o)); this.flags={}; this.queue=[]; this.queueT=0; this.placing=null; this.heat=0; this.triggersDone=new Set();
+    this.unlocked = store.get('abilities', {}); if(mission.unlock) mission.unlock.forEach(a=>this.unlocked[a]=true); store.set('abilities', this.unlocked);
+    seed=mission.seed||5; this.world=new World(mission.map);
+    scene.fog = new THREE.Fog(mission.fog||0x0a0a0a, mission.fogNear||60, mission.fogFar||170); scene.background=new THREE.Color(mission.fog||0x0a0a0a);
+    hemi.color.setHex(mission.sky||0x8fa3c9); hemi.groundColor.setHex(mission.groundLight||0x2a2420); hemi.intensity=mission.hemi||0.55; sun.color.setHex(mission.sun||0xffffff); sun.intensity=mission.sunI||0.95;
+    mission.setup(this);
+    if(mission.rain) this.makeRain();
+    const hq=this.buildings.find(b=>b.team===1); const c=mission.camStart||(hq?{x:hq.x,z:hq.z}:{x:0,z:0}); cam.x=c.x; cam.z=c.z; cam.yaw=mission.yaw!==undefined?mission.yaw:Math.PI*0.25; cam.dist=mission.camDist||42;
+    this.theo=this.units.find(u=>u.type==='theo'); this.john=this.units.find(u=>u.type==='john');
+  }
+  makeRain(){ const n=1600; const pos=new Float32Array(n*3); for(let i=0;i<n;i++){ pos[i*3]=rnd(80,-80); pos[i*3+1]=rnd(40); pos[i*3+2]=rnd(80,-80);} const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); this.rain=new THREE.Points(g,new THREE.PointsMaterial({color:0x8fa3c9,size:0.12,transparent:true,opacity:0.55})); scene.add(this.rain); }
+  spawnUnit(type,team,x,z,opts={}){ const w=this.world; const [cx,cz]=w.toCell(x,z); const [fx_,fz]=w.nearestFree(cx,cz,10); const [wx,wz]=w.toWorld(fx_,fz); const u=new Unit(type,team,wx+rnd(0.3,-0.3),wz+rnd(0.3,-0.3)); this.units.push(u); return u; }
+  spawnBuilding(type,team,cx,cz,built=true){ const b=new Building(type,team,cx,cz,built); this.buildings.push(b); return b; }
+  spawnKale(cx,cz,amount=350){ const k=new Kale(cx,cz,amount); this.kales.push(k); return k; }
+  addKale(n){ this.kale+=n; } addRuf(n){ this.ruf+=n; }
+  log(t){ UI.log(t); }
+  say(who,line,dur=5.5,name){ this.msgQueue.push({who,line,dur,name}); }
+  enemies(team){ return team===1? this.units.filter(u=>u.team===2&&u.alive).concat(this.buildings.filter(b=>b.team===2&&b.alive)) : this.units.filter(u=>u.team===1&&u.alive).concat(this.buildings.filter(b=>b.team===1&&b.alive&&b.type!=='wald')); }
+  nearestEnemy(e, range){ let best=null, bd=range*range; const list=this.enemies(e.team); for(const o of list){ let d; if(o.isBuilding){ const hx=o.r; const px=clamp(e.x,o.x-hx,o.x+hx), pz=clamp(e.z,o.z-hx,o.z+hx); d=dist2(e.x,e.z,px,pz); } else d=dist2(e.x,e.z,o.x,o.z); if(d<bd){ bd=d; best=o; } } return best; }
+  nearestKale(x,z){ let best=null, bd=Infinity; for(const k of this.kales){ if(k.amount<=0) continue; const d=dist2(x,z,k.x,k.z); if(d<bd){bd=d;best=k;} } return best; }
+  nearestDropoff(x,z){ let best=null, bd=Infinity; for(const b of this.buildings){ if(b.team!==1||b.dead||!b.def.dropoff||b.progress<1) continue; const d=dist2(x,z,b.x,b.z); if(d<bd){bd=d;best=b;} } return best; }
+  playerTarget(){ const bs=this.buildings.filter(b=>b.team===1&&b.alive&&b.type!=='wald'); if(bs.length) return bs[Math.floor(Math.random()*bs.length)]; const us=this.units.filter(u=>u.team===1&&u.alive); return us.length?us[0]:null; }
+  areaDamage(x,z,r,dmg,team,from){ for(const e of this.enemies(team)){ const d=e.isBuilding? Math.max(0,Math.sqrt(dist2(x,z,e.x,e.z))-e.r) : Math.sqrt(dist2(x,z,e.x,e.z)); if(d<=r) e.damage(dmg,from); } }
+  projectile(x,z,y,target,dmg,color,aoe,from){ const m=mesh(GEO.sph, new THREE.MeshBasicMaterial({color}), 0.18,0.18,0.18, x,y,z,false); scene.add(m); this.projs.push({m,x,z,y,target,dmg,aoe,from,t:0,sx:x,sz:z,sy:y}); }
+  onDeath(e, from){
+    if(e.isBuilding){ this.log(`${e.def.name} ${e.team===2?'abgerissen':'verloren'}.`); if(e.team===2) this.addRuf(15); if(this.selected.includes(e)) this.deselect(e); }
+    else { if(e.team===2 && from && from.team===1) this.addRuf(3); if(e.def.hero && e.team===1){ this.log(`${e.def.name} ist gefallen.`); } if(this.selected.includes(e)) this.deselect(e); }
+    if(this.mission.onDeath) this.mission.onDeath(this,e);
+  }
+  onBuilt(b){ if(this.mission.onBuilt) this.mission.onBuilt(this,b); }
+  defend(b, attacker){ // Wache: untätige eigene Einheiten in der Nähe reagieren auf Angriffe auf Gebäude
+    if((b.defT||0)>this.time) return; b.defT=this.time+2.5; const own=this.units.filter(u=>u.team===b.team&&u.alive&&u.def.acquire>0&&(u.state==='idle'||(u.state==='move'&&u.attackMove))&&dist2(u.x,u.z,b.x,b.z)<22*22);
+    own.slice(0,6).forEach(u=>u.orderAttack(attacker)); if(b.team===1&&own.length&&b.type!=='wald') this.log(`${b.def.name} wird angegriffen.`); }
+  deselect(e){ e.selected=false; this.selected=this.selected.filter(s=>s!==e); UI.selectionChanged(); }
+  select(list, add=false){ if(!add) this.selected.forEach(s=>s.selected=false); const set=add?this.selected.slice():[]; list.forEach(e=>{ if(!set.includes(e)){ set.push(e); e.selected=true; } }); this.selected=set.filter(e=>e.alive); UI.selectionChanged(); }
+  ownUnits(){ return this.selected.filter(e=>!e.isBuilding&&e.team===1&&e.alive); }
+  command(x,z,entity,attackMove=false){ // Rechtsklick
+    const us=this.ownUnits(); if(!us.length) return;
+    if(entity && entity.team===2 && entity.alive){ us.forEach(u=>u.orderAttack(entity)); fx.wave(entity.x,entity.z,1.2,0xe6394a); return; }
+    if(entity && entity.kaleObj){ us.forEach(u=>u.orderHarvest(entity.kaleObj)); fx.wave(entity.x,entity.z,1.2,0x7fc45c); return; }
+    // Formation: kleine Spirale um den Zielpunkt
+    const n=us.length; us.forEach((u,i)=>{ const a=i*2.4, r=i?0.9*Math.sqrt(i):0; u.orderMove(x+Math.cos(a)*r, z+Math.sin(a)*r, attackMove); }); fx.wave(x,z,1.0, attackMove?0xe6394a:0x7fc45c);
+  }
+  // Fähigkeiten
+  useAbility(id){ const a=ABILITIES[id]; const u=this.units.find(u=>u.type===a.owner&&u.alive); if(!u) return; if(a.req&&!this.unlocked[a.req]) return; if(u.cooldowns[id]>0){ this.log(`${a.name}: noch nicht bereit.`); return; } if(this.ruf<a.ruf){ this.log(`${a.name}: zu wenig Ruf.`); return; }
+    this.ruf-=a.ruf; u.cooldowns[id]=a.cd;
+    if(id==='gurren'){ Audio.purr(1.6); fx.wave(u.x,u.z,UNITS.theo.aura.radius,0xe0b23a); this.units.forEach(o=>{ if(o.team===1&&o.alive&&dist2(o.x,o.z,u.x,u.z)<UNITS.theo.aura.radius**2){ o.hp=Math.min(o.maxHp,o.hp+60); o.buff=8; } }); this.say('theo','(tief, unkontrolliert, involuntär)',3); }
+    if(id==='fsucker'){ Audio.chord([82.4,123.5,164.8],0.6,0.7); Audio.hat(0.3); fx.wave(u.x,u.z,5.5,0xe6394a); this.areaDamage(u.x,u.z,5.5,70,1,u); this.say('theo','Fucker Sucker. Das ist eine Haltung.',3); }
+    if(id==='riff'){ Audio.chord([41.2,61.7,82.4],1.2,0.8); fx.wave(u.x,u.z,7,0xf2ede4); for(const e of this.enemies(1)){ const d=Math.sqrt(dist2(u.x,u.z,e.x,e.z)); if(d<=7+(e.r||0)){ e.damage(45,u); if(!e.isBuilding) e.stun=3; } } this.say('john','Langsam. Schwer. Jeder Ton wie ein Stein.',3); }
+    if(id==='blick'){ Audio.thud(); fx.wave(u.x,u.z,8,0xb9b4c7); this.units.forEach(e=>{ if(e.team===2&&e.alive&&dist2(e.x,e.z,u.x,u.z)<64){ e.flee=4; e.attackTarget=null; } }); this.say('cat','Registriert. Für unwichtig befunden.',3,'Smokey'); }
+    UI.selectionChanged();
+  }
+  // Bau & Produktion
+  canAfford(def){ return this.kale>=def.cost; }
+  hasBuilding(type){ return this.buildings.some(b=>b.team===1&&b.alive&&b.type===type&&b.progress>=1); }
+  reqOk(def){ return !def.req || this.hasBuilding(def.req); }
+  tryPlace(type,cx,cz){
+    const def=BUILDINGS[type]; if(!this.canAfford(def)){ this.log('Zu wenig Grünkohl.'); return false; }
+    if(!this.placeValid(type,cx,cz)){ this.log('Hier geht das nicht. Näher an den Käfig, auf freien Boden.'); return false; }
+    this.kale-=def.cost; const b=this.spawnBuilding(type,1,cx,cz,false); Audio.thud(); this.log(`${def.name} wird gebaut.`);
+    // Einheiten aus der Fläche schieben
+    this.units.forEach(u=>{ const [ux,uz]=this.world.toCell(u.x,u.z); if(this.world.bld[this.world.idx(ux,uz)]===b){ const [fx_,fz]=this.world.nearestFree(ux,uz); const [wx,wz]=this.world.toWorld(fx_,fz); u.x=wx; u.z=wz; } });
+    return true;
+  }
+  placeValid(type,cx,cz){ const def=BUILDINGS[type]; const size=def.size; const r=Math.floor(size/2); const sx=size%2?cx-r:cx-r+1, sz=size%2?cz-r:cz-r+1; const w=this.world;
+    for(let dx=0;dx<size;dx++) for(let dz=0;dz<size;dz++){ const x=sx+dx, z=sz+dz; if(!w.free(x,z)) return false; const t=w.type[w.idx(x,z)]; if(t==='water') return false; }
+    const [wx,wz]=w.toWorld(cx,cz); const own=this.buildings.filter(b=>b.team===1&&b.alive&&b.type!=='wald'); if(!own.length) return true; return own.some(b=>dist2(b.x,b.z,wx,wz) < (this.mission.buildRadius||13)**2); }
+  enqueue(type){ const def=UNITS[type]; if(!this.hasBuilding('proberaum')){ this.log('Dafür braucht es einen Proberaum.'); return; } if(!this.reqOk(def)){ this.log(`${def.name} braucht: ${BUILDINGS[def.req].name}.`); return; } if(this.queue.length>=8){ this.log('Warteschlange voll.'); return; } if(!this.canAfford(def)){ this.log('Zu wenig Grünkohl.'); return; } this.kale-=def.cost; this.queue.push(type); UI.refreshBuild(); }
+  dequeue(type){ const i=this.queue.lastIndexOf(type); if(i<0) return; if(i===0) this.queueT=0; this.queue.splice(i,1); this.kale+=UNITS[type].cost; UI.refreshBuild(); }
+  updateQueue(dt){ if(!this.queue.length) return; const pr=this.buildings.filter(b=>b.team===1&&b.alive&&b.type==='proberaum'&&b.progress>=1); if(!pr.length) return; const type=this.queue[0]; this.queueT+=dt*Math.min(2, 1+0.5*(pr.length-1)); if(this.queueT>=UNITS[type].time){ this.queueT=0; this.queue.shift(); const b=pr[0]; const u=this.spawnUnit(type,1,b.x,b.z+b.r+1.2); if(type==='maus'){ const k=this.nearestKale(u.x,u.z); if(k) u.orderHarvest(k); } else { u.orderMove(b.x+rnd(3,-3), b.z+b.r+3, false); } this.log(`${UNITS[type].name} bereit.`); if(type==='maus') Audio.squeak(); UI.refreshBuild(); } }
+  // Wellen
+  updateWaves(dt){ const m=this.mission; if(!m.waves) return; while(this.waveIdx<m.waves.length && m.waves[this.waveIdx].t<=this.time){ this.launchWave(m.waves[this.waveIdx]); this.waveIdx++; } if(m.repeat && this.time>m.repeat.after){ this.repT=(this.repT||m.repeat.every)-dt; if(this.repT<=0){ this.repT=m.repeat.every; const k=Math.floor((this.time-m.repeat.after)/m.repeat.every); const w={units:{}, from:m.repeat.from}; for(const t in m.repeat.units) w.units[t]=m.repeat.units[t]+Math.floor(k*(m.repeat.grow||0.5)); this.launchWave(w); } } }
+  launchWave(w){ const from=w.from||this.mission.spawn; const pts=Array.isArray(from)?from:[from]; const p=pts[Math.floor(Math.random()*pts.length)]; const [x,z]=this.world.toWorld(p[0],p[1]); const tgt=w.target? this.buildings.find(b=>b.type===w.target&&b.alive) : this.playerTarget(); let n=0; for(const t in w.units){ for(let i=0;i<w.units[t];i++){ const u=this.spawnUnit(t,2,x+rnd(2,-2),z+rnd(2,-2)); if(tgt) u.orderMove(tgt.x,tgt.z,true); n++; } } if(w.msg) this.say(w.msgWho||'sys', w.msg); else if(n) this.log('Das Bauamt rückt an.'); if(w.say) w.say(this); }
+  update(dt){
+    if(this.over) return; this.time+=dt; const m=this.mission;
+    this.units.forEach(u=>u.update(dt)); this.buildings.forEach(b=>b.update(dt));
+    // Trennung zwischen Einheiten
+    const us=this.units; for(let i=0;i<us.length;i++){ const a=us[i]; if(a.dead) continue; for(let j=i+1;j<us.length;j++){ const b=us[j]; if(b.dead) continue; const dx=b.x-a.x, dz=b.z-a.z; const d2=dx*dx+dz*dz; const md=a.r+b.r+0.15; if(d2<md*md&&d2>1e-6){ const d=Math.sqrt(d2); const push=(md-d)*0.5; const nx=dx/d, nz=dz/d; const wa=a.state==='idle'?0.3:1, wb=b.state==='idle'?0.3:1; a.x-=nx*push*wa; a.z-=nz*push*wa; b.x+=nx*push*wb; b.z+=nz*push*wb; } } }
+    this.units=this.units.filter(u=>!u.removed); this.buildings=this.buildings.filter(b=>!b.removed);
+    // Projektile
+    for(let i=this.projs.length-1;i>=0;i--){ const p=this.projs[i]; p.t+=dt*3.2; const t=p.target; const tx=t.x, tz=t.z; const ty=t.isBuilding?1.2:0.7; const k=Math.min(1,p.t); p.m.position.set(lerp(p.sx,tx,k), lerp(p.sy,ty,k)+Math.sin(k*Math.PI)*1.5, lerp(p.sz,tz,k)); if(k>=1){ if(!t.dead){ if(p.aoe){ fx.wave(tx,tz,p.aoe,0xe6394a); this.areaDamage(tx,tz,p.aoe,p.dmg,p.from.team,p.from); } else { t.damage(p.dmg,p.from); fx.hit(tx,tz, p.from.team===1?0xe6394a:0x9fd8ee); } } scene.remove(p.m); p.m.material.dispose(); this.projs.splice(i,1); } }
+    this.updateQueue(dt); this.updateWaves(dt); fx.update(dt);
+    if(m.heat){ this.heat=Math.min(1, this.time/ (m.heatTime||240)); }
+    if(this.rain){ const a=this.rain.geometry.attributes.position; for(let i=0;i<a.count;i++){ let y=a.getY(i)-dt*22; if(y<0){ y=40; a.setX(i,cam.x+rnd(80,-80)); a.setZ(i,cam.z+rnd(80,-80)); } a.setY(i,y); } a.needsUpdate=true; }
+    // Dialog
+    if(this.msgT>0){ this.msgT-=dt; if(this.msgT<=0) UI.dialog(null); } else if(this.msgQueue.length){ const q=this.msgQueue.shift(); UI.dialog(q); this.msgT=q.dur; }
+    // Trigger & Ziele
+    if(m.tick) m.tick(this,dt);
+    (m.triggers||[]).forEach((tr,i)=>{ if(this.triggersDone.has(i)) return; if(tr.when(this)){ this.triggersDone.add(i); tr.run(this); } });
+    this.objT=(this.objT||0)+dt; if(this.objT>0.5){ this.objT=0; let changed=false; this.objectives.forEach(o=>{ if(!o.done&&o.check(this)){ o.done=true; changed=true; this.log(`Ziel erreicht: ${o.text}`); if(o.onDone) o.onDone(this); } }); if(changed) UI.refreshObjectives();
+      const required=this.objectives.filter(o=>!o.optional); if(required.every(o=>o.done)) this.win();
+      if(m.lose && m.lose(this)) this.lose(m.loseText? m.loseText(this):'Die Band ist am Ende.'); }
+    UI.tick(dt);
+  }
+  win(){ if(this.over) return; this.over=true; const done=store.get('progress',0); store.set('progress', Math.max(done, this.mission.index+1)); setTimeout(()=>Flow.debrief(this.mission, true), 1200); }
+  lose(text){ if(this.over) return; this.over=true; this.loseText=text; setTimeout(()=>Flow.debrief(this.mission, false), 1200); }
+  dispose(){ this.units.forEach(u=>u.remove()); this.buildings.forEach(b=>b.remove()); this.kales.forEach(k=>k.remove()); this.projs.forEach(p=>scene.remove(p.m)); fx.clear(); if(this.rain) scene.remove(this.rain); this.world.dispose(); Audio.stopRain(); }
+}
+/* ---------- Eingabe: Maus, Tastatur, Touch ---------- */
+const Input = {
+  keys:{}, mouse:{x:0,y:0,down:false,btn:0,sx:0,sy:0,drag:false}, groups:{}, attackMode:false, lastClick:0,
+  init(){
+    const c=canvas;
+    c.addEventListener('contextmenu', e=>e.preventDefault());
+    c.addEventListener('pointerdown', e=>{ Audio.init(); if(!game) return; this.mouse.down=true; this.mouse.btn=e.button; this.mouse.sx=e.clientX; this.mouse.sy=e.clientY; this.mouse.drag=false; this.mouse.px=e.clientX; this.mouse.py=e.clientY; this.pointerType=e.pointerType; c.setPointerCapture(e.pointerId);
+      if(e.pointerType==='touch'){ this.touchT=performance.now(); } });
+    c.addEventListener('pointermove', e=>{ this.mouse.x=e.clientX; this.mouse.y=e.clientY; if(!game) return;
+      if(this.mouse.down){ const dx=e.clientX-this.mouse.sx, dy=e.clientY-this.mouse.sy; if(Math.abs(dx)+Math.abs(dy)>6) this.mouse.drag=true;
+        if(this.mouse.btn===1 || (this.mouse.btn===0&&this.keys['Space']) || (this.pointerType==='touch'&&this.mouse.drag&&!game.placing)){ // Kamera ziehen
+          const mdx=e.clientX-this.mouse.px, mdy=e.clientY-this.mouse.py; this.pan(-mdx*0.06*cam.dist/42, -mdy*0.06*cam.dist/42); }
+        else if(this.mouse.btn===0 && this.mouse.drag && !game.placing){ UI.selbox(this.mouse.sx,this.mouse.sy,e.clientX,e.clientY); }
+      }
+      this.mouse.px=e.clientX; this.mouse.py=e.clientY; });
+    c.addEventListener('pointerup', e=>{ if(!game||!this.mouse.down) return; this.mouse.down=false; UI.selbox(null);
+      const isTouch=e.pointerType==='touch'; const longPress = isTouch && (performance.now()-this.touchT>420);
+      if(this.mouse.btn===1) return;
+      if(this.mouse.drag){ if(this.mouse.btn===0 && !isTouch && !game.placing) this.boxSelect(this.mouse.sx,this.mouse.sy,e.clientX,e.clientY, e.shiftKey); return; }
+      const hit=this.pick(e.clientX,e.clientY); if(!hit) return;
+      if(game.placing){ if(this.mouse.btn===0 && !longPress){ const [cx,cz]=game.world.toCell(hit.x,hit.z); if(game.tryPlace(game.placing,cx,cz)){ if(!e.shiftKey) UI.setPlacing(null); else UI.refreshBuild(); } } else UI.setPlacing(null); return; }
+      const rightish = this.mouse.btn===2 || longPress || (isTouch && game.ownUnits().length && !hit.entity) || (this.attackMode&&this.mouse.btn===0);
+      if(rightish){ game.command(hit.x,hit.z,hit.entity,this.attackMode); this.attackMode=false; UI.hint(null); return; }
+      if(this.mouse.btn===0){ const now=performance.now(); const dbl=now-this.lastClick<350 && hit.entity && hit.entity===this.lastEntity; this.lastClick=now; this.lastEntity=hit.entity;
+        if(hit.entity && !hit.entity.kaleObj){ if(dbl && !hit.entity.isBuilding && hit.entity.team===1){ game.select(this.visibleOfType(hit.entity.type), e.shiftKey); } else game.select([hit.entity], e.shiftKey && hit.entity.team===1); }
+        else if(!e.shiftKey) game.select([]); }
+    });
+    c.addEventListener('wheel', e=>{ e.preventDefault(); cam.dist=clamp(cam.dist+Math.sign(e.deltaY)*3, cam.minD, cam.maxD); }, {passive:false});
+    // Pinch-Zoom
+    let pinch=null; c.addEventListener('touchstart', e=>{ if(e.touches.length===2){ pinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); } }, {passive:true});
+    c.addEventListener('touchmove', e=>{ if(e.touches.length===2&&pinch){ const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); cam.dist=clamp(cam.dist-(d-pinch)*0.08, cam.minD, cam.maxD); pinch=d; } }, {passive:true});
+    c.addEventListener('touchend', ()=>{ pinch=null; }, {passive:true});
+    addEventListener('keydown', e=>{ if(e.target.tagName==='INPUT') return; this.keys[e.code]=true; if(!game||game.over) return; if(e.code==='Space') e.preventDefault();
+      const k=e.key.toLowerCase();
+      if(e.code==='Escape'){ if(game.placing) UI.setPlacing(null); else if(this.attackMode){ this.attackMode=false; UI.hint(null);} else game.select([]); }
+      if(k==='a' && game.ownUnits().length){ this.attackMode=true; UI.hint('Angriffsbewegung: Ziel anklicken'); }
+      if(k==='s'){ game.ownUnits().forEach(u=>u.orderStop()); }
+      if(k==='h'){ Flow.help(true); }
+      if(k==='j'){ if(game.john&&game.john.alive){ game.select([game.john]); this.center(game.john);} }
+      if(k==='t'){ if(game.theo&&game.theo.alive){ game.select([game.theo]); this.center(game.theo);} }
+      if(k==='g') game.useAbility('gurren'); if(k==='f') game.useAbility('fsucker'); if(k==='r') game.useAbility('riff'); if(k==='b') game.useAbility('blick');
+      if(k==='m'){ UI.minimapCenterOnHQ(); }
+      if(/^[1-5]$/.test(k)){ if(e.ctrlKey||e.metaKey){ this.groups[k]=game.selected.slice(); game.log(`Gruppe ${k} gespeichert.`); e.preventDefault(); } else if(this.groups[k]){ const g=this.groups[k].filter(u=>u.alive); game.select(g); if(g.length&&now()-(this.gT||0)<400) this.center(g[0]); this.gT=now(); } }
+    });
+    addEventListener('keyup', e=>{ this.keys[e.code]=false; });
+    addEventListener('blur', ()=>{ this.keys={}; });
+  },
+  visibleOfType(type){ return game.units.filter(u=>u.alive&&u.team===1&&u.type===type); },
+  pan(dx,dz){ const cy=Math.cos(cam.yaw), sy=Math.sin(cam.yaw); cam.x += dx*cy - dz*sy; cam.z += -dx*sy - dz*cy; this.clampCam(); },
+  clampCam(){ const w=game.world; const lim=w.W*CELL/2+6; cam.x=clamp(cam.x,-lim,lim); cam.z=clamp(cam.z,-w.H*CELL/2-6, w.H*CELL/2+6); },
+  center(e){ cam.x=e.x; cam.z=e.z; },
+  update(dt){ if(!game) return; const k=this.keys; const s=dt*32*(cam.dist/42); let dx=0,dz=0;
+    if(k['ArrowUp']) dz-=s; if(k['ArrowDown']) dz+=s; if(k['ArrowLeft']) dx-=s; if(k['ArrowRight']) dx+=s;
+    if(k['KeyQ']) cam.yaw+=dt*1.6; if(k['KeyE']) cam.yaw-=dt*1.6;
+    // Randscrollen (nur mit Maus, nicht am Touch)
+    if(this.pointerType!=='touch' && !this.mouse.down){ const m=this.mouse; const W=innerWidth, H=innerHeight; const edge=14; if(m.x<edge&&m.x>0) dx-=s; if(m.x>W-edge-236&&m.x<W-236) dx+=s; if(m.y<edge+44&&m.y>44) dz-=s; if(m.y>H-edge&&m.y<H) dz+=s; }
+    if(dx||dz) this.pan(dx,dz);
+    const hit=this.pick(this.mouse.x,this.mouse.y); UI.updateGhost(hit); UI.cursorFor(hit);
+  },
+  pick(sx,sy){ const rect=canvas.getBoundingClientRect(); const nd=new THREE.Vector2(((sx-rect.left)/rect.width)*2-1, -((sy-rect.top)/rect.height)*2+1); const rc=new THREE.Raycaster(); rc.setFromCamera(nd,camera); const pl=new THREE.Plane(new THREE.Vector3(0,1,0),0); const p=new THREE.Vector3(); if(!rc.ray.intersectPlane(pl,p)) return null;
+    // Entität unter dem Cursor: nächste Einheit (Radius), dann Gebäude (Fußabdruck), dann Grünkohl
+    let best=null, bd=1.0; for(const u of game.units){ if(u.dead) continue; const d=Math.sqrt(dist2(p.x,p.z,u.x,u.z))-u.r; if(d<bd){bd=d;best=u;} }
+    if(!best){ const [cx,cz]=game.world.toCell(p.x,p.z); if(game.world.inb(cx,cz)){ const b=game.world.bld[game.world.idx(cx,cz)]; if(b&&b.alive) best=b; } }
+    if(!best){ for(const k of game.kales){ if(k.amount>0 && dist2(p.x,p.z,k.x,k.z)<2.6){ best={kaleObj:k, x:k.x, z:k.z, team:0}; break; } } }
+    return {x:p.x, z:p.z, entity:best};
+  },
+  toScreen(x,y,z){ const v=new THREE.Vector3(x,y,z).project(camera); const rect=canvas.getBoundingClientRect(); return [ (v.x+1)/2*rect.width+rect.left, (1-v.y)/2*rect.height+rect.top ]; },
+  boxSelect(x1,y1,x2,y2,add){ const l=Math.min(x1,x2), r=Math.max(x1,x2), t=Math.min(y1,y2), b=Math.max(y1,y2); const list=game.units.filter(u=>{ if(!u.alive||u.team!==1) return false; const [sx,sy]=this.toScreen(u.x,0.5,u.z); return sx>=l&&sx<=r&&sy>=t&&sy<=b; }); if(list.length) game.select(list,add); else if(!add) game.select([]); }
+};
+const now=()=>performance.now();
+
+/* ---------- HUD ---------- */
+const UI = {
+  tab:'b', ghost:null, lastMini:0,
+  init(){
+    $('tab-b').onclick=()=>{this.tab='b'; $('tab-b').classList.add('active'); $('tab-u').classList.remove('active'); this.refreshBuild();};
+    $('tab-u').onclick=()=>{this.tab='u'; $('tab-u').classList.add('active'); $('tab-b').classList.remove('active'); this.refreshBuild();};
+    $('b-menu').onclick=()=>Flow.pause(); $('b-help').onclick=()=>Flow.help(true);
+    $('b-sound').onclick=()=>{ const on=Audio.toggle(); $('b-sound').textContent=on?'Ton an':'Ton aus'; $('b-sound').classList.toggle('active',on); };
+    $('b-speed').onclick=()=>{ if(!game) return; game.speed = game.speed>=3?1:game.speed+1; $('b-speed').textContent=game.speed+'×'; };
+    const mm=$('minimap'); const mmClick=e=>{ if(!game) return; const r=mm.getBoundingClientRect(); const u=(e.clientX-r.left)/r.width, v=(e.clientY-r.top)/r.height; const w=game.world; cam.x=(u-0.5)*w.W*CELL; cam.z=(v-0.5)*w.H*CELL; Input.clampCam(); };
+    mm.addEventListener('pointerdown', e=>{ mmClick(e); mm.setPointerCapture(e.pointerId); mm.onpointermove=mmClick; }); mm.addEventListener('pointerup', ()=>{ mm.onpointermove=null; });
+    this.mmc=mm.getContext('2d');
+  },
+  log(t){ const d=document.createElement('div'); d.textContent=t; const box=$('log'); box.appendChild(d); while(box.children.length>6) box.removeChild(box.firstChild); setTimeout(()=>d.classList.add('fade'),7000); setTimeout(()=>d.remove(),8200); },
+  dialog(q){ const b=$('dialog'); if(!q){ b.classList.remove('on'); return; } const names={theo:'Theo',john:'John',sys:'',cat:'Smokey',bauamt:'Das Bauamt',adriana:'Adriana',susanna:'Susanna',bounty:'Bounty'}; $('dlg-who').textContent=q.name||names[q.who]||''; $('dlg-who').className='who '+q.who; $('dlg-line').textContent=q.line; b.classList.add('on'); },
+  hint(t){ const h=$('cursorhint'); if(!t){ h.classList.remove('on'); return; } h.textContent=t; h.classList.add('on'); },
+  selbox(x1,y1,x2,y2){ const b=$('selbox'); if(x1===null){ b.style.display='none'; return; } b.style.display='block'; b.style.left=Math.min(x1,x2)+'px'; b.style.top=Math.min(y1,y2)+'px'; b.style.width=Math.abs(x2-x1)+'px'; b.style.height=Math.abs(y2-y1)+'px'; },
+  start(){ $('hud').classList.add('on'); $('hud-mission').textContent=game.mission.title; $('b-speed').textContent='1×'; this.refreshBuild(); this.refreshObjectives(); this.selectionChanged(); this.miniBase=null; $('log').innerHTML=''; },
+  stop(){ $('hud').classList.remove('on'); this.setPlacing(null); },
+  refreshObjectives(){ const ul=$('objlist'); ul.innerHTML=''; game.objectives.forEach(o=>{ const li=document.createElement('li'); li.textContent=typeof o.text==='function'?o.text(game):o.text; if(o.done) li.classList.add('done'); if(o.optional) li.classList.add('opt'); ul.appendChild(li); }); },
+  refreshBuild(){ const g=$('buildgrid'); g.innerHTML=''; const m=game.mission; const list = this.tab==='b' ? (m.build||PLAYER_BUILD) : (m.train||PLAYER_TRAIN);
+    if(!list.length){ g.innerHTML='<div style="grid-column:1/-1;color:var(--ash);font-size:.8rem;padding:6px">Hier wird nichts gebaut. Noch nicht.</div>'; }
+    list.forEach(type=>{ const isB=this.tab==='b'; const def=isB?BUILDINGS[type]:UNITS[type]; const b=document.createElement('button'); b.className='bb'; b.id='bb-'+type;
+      const reqName = def.req? (BUILDINGS[def.req]||{}).name : null; const ok = game.reqOk(def) && (isB || game.hasBuilding('proberaum'));
+      b.innerHTML=`<span class="ic">${def.ic}</span><span class="nm">${def.name}</span><span class="cs">${def.cost} Grünkohl · ${def.time}s</span>${!ok?`<span class="req">braucht ${isB?reqName:(reqName||'Proberaum')}</span>`:''}<i class="prog"></i>`;
+      b.disabled=!ok; b.title=def.desc;
+      if(isB){ if(game.placing===type) b.classList.add('placing'); b.onclick=()=>{ this.setPlacing(game.placing===type?null:type); }; }
+      else { const n=game.queue.filter(t=>t===type).length; if(n) b.insertAdjacentHTML('beforeend',`<span class="q">${n}</span>`); b.onclick=()=>game.enqueue(type); b.oncontextmenu=e=>{ e.preventDefault(); game.dequeue(type); }; }
+      g.appendChild(b); });
+    $('sidehint').textContent = this.tab==='b' ? 'Gebäude wählen, dann auf freien Boden nahe der eigenen Basis klicken. Shift hält die Auswahl.' : 'Klick reiht ein, Rechtsklick nimmt raus. Mäuse ernten von selbst.';
+  },
+  setPlacing(type){ game.placing=type; if(this.ghost){ scene.remove(this.ghost); this.ghost=null; } if(type){ this.ghost=buildBuildingModel(type,1); this.ghost.traverse(o=>{ if(o.material&&!o.isLineSegments){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=0.55; } o.castShadow=false; }); const def=BUILDINGS[type]; const fp=mesh(GEO.plane, new THREE.MeshBasicMaterial({color:0x7fc45c, transparent:true, opacity:0.35, side:THREE.DoubleSide}), def.size*CELL, def.size*CELL, 1, 0,0.03,0,false); fp.rotation.x=-Math.PI/2; fp.name='fp'; this.ghost.add(fp); scene.add(this.ghost); this.hint(`${def.name} platzieren · Esc bricht ab`); } else this.hint(Input.attackMode?'Angriffsbewegung: Ziel anklicken':null); this.refreshBuild(); },
+  updateGhost(hit){ if(!this.ghost||!hit) return; const [cx,cz]=game.world.toCell(hit.x,hit.z); const def=BUILDINGS[game.placing]; const [x,z]=game.world.toWorld(cx,cz); this.ghost.position.set(x+(def.size%2?0:CELL/2),0,z+(def.size%2?0:CELL/2)); const ok=game.placeValid(game.placing,cx,cz)&&game.canAfford(def); this.ghost.getObjectByName('fp').material.color.setHex(ok?0x7fc45c:0xe6394a); },
+  cursorFor(hit){ if(!game) return; let c='default'; if(game.placing) c='crosshair'; else if(Input.attackMode) c='crosshair'; else if(hit&&hit.entity){ if(hit.entity.team===2&&game.ownUnits().length) c='crosshair'; else c='pointer'; } canvas.style.cursor=c; },
+  selectionChanged(){ const p=$('selpanel'); const sel=game.selected.filter(e=>e.alive); if(!sel.length){ p.classList.remove('on'); return; } p.classList.add('on'); const e=sel[0]; const def=e.def; $('sel-portrait').textContent=def.ic; $('sel-name').textContent = sel.length>1? `${def.name} +${sel.length-1}` : def.name; $('sel-desc').textContent = e.isBuilding&&e.progress<1 ? `Im Bau … ${Math.round(e.progress*100)} %` : def.desc; $('sel-hp').style.width=Math.round(100*e.hp/e.maxHp)+'%';
+    const ab=$('abilities'); ab.innerHTML=''; if(!e.isBuilding&&e.team===1){ Object.entries(ABILITIES).forEach(([id,a])=>{ if(a.owner!==e.type) return; if(a.req&&!game.unlocked[a.req]) return; const b=document.createElement('button'); b.className='ab'; b.dataset.tip=a.tip; b.innerHTML=`<span class="ic">${a.ic}</span><span class="k">${a.key} · ${a.ruf}★</span><i class="cd"></i>`; b.onclick=()=>game.useAbility(id); b.dataset.id=id; ab.appendChild(b); }); }
+    if(e.isBuilding && e.team===1 && e.def.trains){ const b=document.createElement('button'); b.className='ab'; b.innerHTML='<span class="ic">🐭</span><span class="k">Einheiten</span>'; b.onclick=()=>$('tab-u').click(); ab.appendChild(b); }
+    this.selE=e; },
+  tick(dt){ // laufende Anzeigen
+    $('r-kale').textContent=Math.floor(game.kale); $('r-ruf').textContent=Math.floor(game.ruf);
+    if(this.selE){ const e=this.selE; if(!e.alive){ game.selected=game.selected.filter(s=>s.alive); this.selectionChanged(); } else { $('sel-hp').style.width=Math.round(100*e.hp/e.maxHp)+'%'; if(e.isBuilding&&e.progress<1) $('sel-desc').textContent=`Im Bau … ${Math.round(e.progress*100)} %`; else if(e.carry) $('sel-desc').textContent=`Trägt ${e.carry} Grünkohl.`; document.querySelectorAll('#abilities .ab[data-id]').forEach(b=>{ const a=ABILITIES[b.dataset.id]; const cd=e.cooldowns[b.dataset.id]||0; b.querySelector('.cd').style.height=(cd/a.cd*100)+'%'; b.disabled = cd>0 || game.ruf<a.ruf; }); } }
+    // Produktionsfortschritt
+    if(this.tab==='u'&&game.queue.length){ const el=$('bb-'+game.queue[0]); if(el) el.querySelector('.prog').style.width=(game.queueT/UNITS[game.queue[0]].time*100)+'%'; }
+    else if(this.tab==='b'){ game.buildings.forEach(b=>{ if(b.team===1&&b.progress<1){ const el=$('bb-'+b.type); if(el) el.querySelector('.prog').style.width=(b.progress*100)+'%'; } }); }
+    const tm=$('objtimer'); const m=game.mission; if(m.timer){ const t=m.timer(game); if(t!==null){ tm.hidden=false; tm.textContent=t; } else tm.hidden=true; } else tm.hidden=true;
+    if(m.heat){ tm.hidden=false; tm.textContent=`Hitze ${Math.round(game.heat*100)} %`; tm.style.color = game.heat>0.7?'var(--blood-bright)':'var(--ruf)'; } else tm.style.color='';
+    if(now()-this.lastMini>120){ this.lastMini=now(); this.drawMini(); }
+  },
+  minimapCenterOnHQ(){ const hq=game.buildings.find(b=>b.team===1&&b.alive); if(hq) Input.center(hq); },
+  drawMini(){ const c=this.mmc; const mm=$('minimap'); const w=game.world; const S=mm.width; const sx=S/w.W, sz=S/w.H;
+    if(!this.miniBase){ const off=document.createElement('canvas'); off.width=S; off.height=S; const g=off.getContext('2d'); for(let cz=0;cz<w.H;cz++) for(let cx=0;cx<w.W;cx++){ const t=w.type[w.idx(cx,cz)]; const col=TERRAIN[t]?TERRAIN[t][0]:0x224422; g.fillStyle='#'+col.toString(16).padStart(6,'0'); g.fillRect(cx*sx,cz*sz,sx+0.5,sz+0.5); } this.miniBase=off; }
+    c.drawImage(this.miniBase,0,0);
+    game.kales.forEach(k=>{ if(k.amount<=0) return; c.fillStyle='#4f8a3a'; c.fillRect((k.cx-0.5)*sx,(k.cz-0.5)*sz,sx*2,sz*2); });
+    game.buildings.forEach(b=>{ if(!b.alive) return; c.fillStyle=b.team===1?'#e6394a':b.team===2?'#3aa0c8':'#e0b23a'; const r=Math.floor(b.size/2); const x0=(b.size%2?b.cx-r:b.cx-r+1), z0=(b.size%2?b.cz-r:b.cz-r+1); c.fillRect(x0*sx,z0*sz,b.size*sx,b.size*sz); });
+    game.units.forEach(u=>{ if(!u.alive) return; const [cx,cz]=w.toCell(u.x,u.z); c.fillStyle=u.team===1?(u.def.hero?'#ffffff':'#f2a0a8'):u.team===2?'#9fd8ee':'#aaaaaa'; c.fillRect(cx*sx-1,cz*sz-1,u.def.hero?4:2.5,u.def.hero?4:2.5); });
+    // Kamera-Rahmen
+    c.strokeStyle='rgba(242,237,228,.7)'; c.lineWidth=1; const half=cam.dist*0.5; const pts=[[-half,-half],[half,-half],[half,half*0.7],[-half,half*0.7]]; c.beginPath(); pts.forEach(([px,pz],i)=>{ const cy=Math.cos(cam.yaw), sy=Math.sin(cam.yaw); const wx=cam.x+px*cy-pz*sy, wz=cam.z-px*sy-pz*cy; const X=(wx/CELL+w.W/2)*sx, Z=(wz/CELL+w.H/2)*sz; if(i) c.lineTo(X,Z); else c.moveTo(X,Z); }); c.closePath(); c.stroke();
+  }
+};
+/* ---------- Kartengeneratoren ---------- */
+function cityPaint(W,H,opt={}){ // Straßenraster mit Häuserblöcken und Innenhöfen (Camden-Logik: alles hat Hinterhöfe)
+  const ops=[]; const s=opt.street||10; const sw=opt.sw||3; seed=opt.seed||3;
+  for(let x=s;x<W-2;x+=s) ops.push({t:'asphalt',x1:x,z1:0,x2:x,z2:H-1,w:sw});
+  for(let z=s;z<H-2;z+=s) ops.push({t:'asphalt',x1:0,z1:z,x2:W-1,z2:z,w:sw});
+  const r=Math.floor(sw/2);
+  for(let bx=0;bx<W;bx+=s) for(let bz=0;bz<H;bz+=s){
+    const x0=bx===0?0:bx+r+1, z0=bz===0?0:bz+r+1; const x1=Math.min(W-1,bx+s-r-1), z1=Math.min(H-1,bz+s-r-1); if(x1-x0<4||z1-z0<4) continue;
+    if(srand()<(opt.openChance||0.25)) continue; // offener Platz
+    const gapA=Math.floor(srand()*4), gapB=Math.floor(srand()*4);
+    for(let x=x0;x<=x1;x++) for(let z=z0;z<=z1;z++){
+      const edge = x===x0||x===x1||z===z0||z===z1; if(!edge) continue;
+      const side = z===z0?0:x===x1?1:z===z1?2:3; const mid = side%2===0 ? Math.abs(x-(x0+x1)/2)<1.1 : Math.abs(z-(z0+z1)/2)<1.1;
+      if((side===gapA||side===gapB) && mid) continue; // Gasse
+      ops.push({t:'block',x,z,w:1,h:1});
+    }
+  }
+  return ops;
+}
+function clearArea(ops,t,x,z,w,h){ ops.push({t,x,z,w,h}); return ops; }
+const PIG_LINES = [ ['theo','London klingt anders.'], ['john','London klingt laut.'], ['theo','Das meine ich.'] ];
+
+/* ---------- Missionen ---------- */
+const MISSIONS = [
+ { index:0, chapter:'Prolog', title:'Borehamwood, 1995', caption:'Borehamwood. 1995. This is where it started.', seed:3,
+   fog:0x0d0f14, sky:0x7a8fb8, rain:true, camDist:36,
+   map:{w:40,h:40,ground:'grass',treeDensity:0.07,brick:0x5a3a2e,paint:(()=>{ const o=[{t:'asphalt',x1:0,z1:20,x2:39,z2:20,w:3}]; for(let i=0;i<5;i++){ o.push({t:'block',x:3+i*7,z:14,w:4,h:2}); o.push({t:'block',x:4+i*7,z:25,w:4,h:2}); } clearArea(o,'dirt',17,28,6,6); return o; })()},
+   startKale:200, build:['buehne'], train:[], buildRadius:16,
+   brief:[['sys','Borehamwood roch nicht nach Rock’n’Roll. Es roch nach nassem Rasen, warmem Plastik und diesem ewigen Vorstadtlicht.'],['sys','Zwei Käfige. Zwei Welten. Die Decke dazwischen dünn wie ein schlechtes Versprechen.'],['theo','Was ist das?'],['john','Musik.'],['theo','Das will ich machen.'],['john','Du weißt nicht wie.'],['theo','Noch nicht.']],
+   objectives:[
+     {text:'Theo zum Radio bringen (Rechtsklick bewegt)', check:g=>{ const r=g.buildings.find(b=>b.type==='radio'); return g.theo&&g.theo.alive&&r&&g.theo.distTo(r)<2.5; }, onDone:g=>{ g.say('theo','Das will ich machen.'); g.say('john','Du weißt nicht mal womit.'); g.say('theo','Noch nicht. Aber ich werde es lernen.'); }},
+     {text:'John zum Radio bringen (J wählt John, T wählt Theo)', check:g=>{ const r=g.buildings.find(b=>b.type==='radio'); return g.john&&g.john.alive&&r&&g.john.distTo(r)<2.5; }, onDone:g=>{ g.say('john','…'); g.say('sys','Er dachte: Ja. Das will ich auch. Er sagte es nicht. Das war nicht Johns Art.'); g.log('Bühne freigeschaltet: Tab „Gebäude“ rechts.'); }},
+     {text:'Eine Bühne bauen (Tab „Gebäude“, dann auf den Boden klicken)', check:g=>g.hasBuilding('buehne'), onDone:g=>{ g.say('sys','Die Band war nicht gegründet worden. Sie war entstanden.'); }}
+   ],
+   setup(g){ g.spawnBuilding('kaefig',1,20,30); g.spawnBuilding('radio',0,20,10); g.units.push(new Unit('john',1,...g.world.toWorld(18,32))); g.units.push(new Unit('theo',1,...g.world.toWorld(22,32)));
+     g.say('sys','Linksklick wählt eine Figur. Rechtsklick schickt sie los. Pfeiltasten oder Mausrand bewegen die Kamera, Mausrad zoomt.',9); },
+   triggers:[ {when:g=>g.time>12, run:g=>{ g.say('sys','Es war ein gewöhnlicher Dienstagabend. Dann kam der Song. Durch die Wand.'); }}, {when:g=>g.time>80&&!g.hasBuilding('buehne')&&g.objectives[1].done, run:g=>g.say('sys','Die Bühne kostet Grünkohl. 200 sind da. Das reicht genau einmal.')} ],
+   outro:[['sys','Von diesem Abend an, wenn die Nacht ruhig war und das Haus schlief, trommelten beide leise gegen ihre Käfigstäbe. Getrennt. Denselben Rhythmus.'],['sys','Nächste Station: Camden. 1996.']]
+ },
+ { index:1, chapter:'Kapitel I', title:'Camden – Die Mäuse-Invasion', caption:'Camden. 1996. They’re not fans. They’re thieves.', seed:9,
+   fog:0x0b0c10, sky:0x6f84ad, rain:true, camDist:40,
+   map:{w:54,h:54,ground:'cobble',paint:(()=>{ const o=cityPaint(54,54,{street:11,seed:9,openChance:0.2}); clearArea(o,'cobble',16,16,12,12); clearArea(o,'dirt',31,19,5,5); clearArea(o,'dirt',12,31,5,5); clearArea(o,'asphalt',44,44,8,8); clearArea(o,'asphalt',2,2,8,8); return o; })(), signs:[{x:27,z:2,text:'CAMDEN MARKET',bg:'#2a1a1a'},{x:5,z:49,text:'THE GOOD MIXER',bg:'#1a2a1a'}]},
+   startKale:120, startRuf:0, build:['proberaum','heuturm','lager'], train:['maus','fan'], enemyActive:true, enemyCap:10,
+   brief:[['sys','Camden, Nordlondon. Zu klein. Zu laut. Zu lebendig. Die Nachbarin hatte einen Topf auf dem Herd vergessen. Die Feuerwehr hinterließ Lücken.'],['sys','In der nächsten Nacht kamen die Mäuse.'],['theo','Wir haben Gesellschaft.'],['john','Das ist eine Maus.'],['theo','Das ist ein Fan.'],['john','Die will das Futter.'],['theo','Alle wollen was. Die wenigsten kommen wegen der Musik. Trotzdem zählen sie.']],
+   objectives:[
+     {text:'Einen Proberaum bauen (150 Grünkohl)', check:g=>g.hasBuilding('proberaum')},
+     {text:'8 Mäuse in der Band (wilde Mäuse werden Fans, wenn Theo nah ist)', check:g=>g.units.filter(u=>u.alive&&u.team===1&&u.type==='maus').length>=8},
+     {text:'300 Grünkohl ernten', check:g=>(g.kaleTotal||0)>=300}
+   ],
+   setup(g){ g.spawnBuilding('kaefig',1,21,21); g.spawnBuilding('amt',2,47,47); g.spawnKale(33,21,300); g.spawnKale(14,33,300); g.spawnKale(24,31,220);
+     g.units.push(new Unit('john',1,...g.world.toWorld(19,24))); g.units.push(new Unit('theo',1,...g.world.toWorld(23,24)));
+     for(let i=0;i<2;i++){ const u=g.spawnUnit('maus',1,...g.world.toWorld(25+i,22)); u.orderHarvest(g.kales[0]); }
+     g.wildT=20; },
+   tick(g,dt){ // wilde Mäuse kommen durch die Wände; Theo macht sie zu Fans
+     g.wildT-=dt; const wild=g.units.filter(u=>u.team===0&&u.alive); if(g.wildT<=0 && wild.length<6){ g.wildT=14; const spots=[[4,5],[48,6],[6,46]]; const s=spots[Math.floor(Math.random()*spots.length)]; const u=g.spawnUnit('maus',0,...g.world.toWorld(s[0],s[1])); const k=g.nearestKale(u.x,u.z); u.orderMove(k?k.x+rnd(2,-2):0, k?k.z+rnd(2,-2):0); g.log('Eine wilde Maus. Sie will das Futter.'); }
+     if(g.theo&&g.theo.alive) wild.forEach(u=>{ if(dist2(u.x,u.z,g.theo.x,g.theo.z)<25){ convert(g,u); } });
+   },
+   waves:[ {t:170, units:{inspektor:2}, from:[47,44], msg:'Hygieneproblem, sagt der Inspektor. Headquarter, sagt Theo.', msgWho:'sys'}, {t:300, units:{inspektor:3,bote:2}, from:[47,44]} ],
+   repeat:{after:380, every:90, units:{inspektor:2,bote:2}, from:[47,44], grow:0.5},
+   lose:g=>!(g.john&&g.john.alive)&&!(g.theo&&g.theo.alive) || !g.buildings.some(b=>b.type==='kaefig'&&b.alive), loseText:g=>'Ohne Käfig kein Headquarter. Ohne Headquarter keine Legende.',
+   outro:[['theo','Das hier wird zur Legende. Jede gute Band braucht ein Headquarter, das keiner versteht.'],['john','Das ist kein Headquarter. Das ist ein Hygieneproblem.'],['theo','Großartigkeit riecht nicht gut.']]
+ },
+ { index:2, chapter:'Kapitel II', title:'The Camden Gig', caption:'Camden. The Room With No Name. For two minutes and forty seconds, everything was right.', seed:14,
+   fog:0x0a0a0c, sky:0x5f74a0, rain:true, camDist:40,
+   map:{w:56,h:56,ground:'cobble',paint:(()=>{ const o=cityPaint(56,56,{street:11,seed:14,openChance:0.15}); clearArea(o,'cobble',22,22,12,12); clearArea(o,'dirt',36,26,4,4); clearArea(o,'dirt',16,36,4,4); clearArea(o,'asphalt',0,0,6,6); clearArea(o,'asphalt',50,0,6,6); clearArea(o,'asphalt',50,50,6,6); clearArea(o,'asphalt',0,50,6,6); return o; })(), signs:[{x:28,z:17,text:'(kein Schild)',fg:'#5a5550',bg:'#0a0a0a'}]},
+   startKale:260, startRuf:20, build:['proberaum','heuturm','lager','buehne','ampwall'], train:['maus','fan','roadie'], enemyActive:true, enemyCap:16,
+   brief:[['sys','Der Ort hatte keinen Namen über der Tür. Kein Schild. Kein Logo. Nur eine Eisentür in einer Seitenstraße hinter dem Camden Market.'],['theo','Dreißig. Vielleicht fünfunddreißig.'],['john','Genug.'],['theo','Vor fünf Leuten zeigst du, was du kannst. Vor dreißig fängst du an zu existieren.'],['sys','Das Bauamt hat den Gig bemerkt. Zwei Minuten und vierzig Sekunden. So lange muss der Raum stehen.']],
+   objectives:[ {text:'Den Raum ohne Namen 2:40 lang halten', check:g=>g.time>=160 && g.buildings.some(b=>b.type==='raum'&&b.alive)} ],
+   timer:g=>{ const t=Math.max(0,160-g.time); return `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`; },
+   setup(g){ g.spawnBuilding('kaefig',1,25,31); g.spawnBuilding('raum',1,29,25); g.spawnBuilding('proberaum',1,31,31); g.spawnKale(37,27,300); g.spawnKale(17,37,300);
+     g.units.push(new Unit('john',1,...g.world.toWorld(27,28))); g.units.push(new Unit('theo',1,...g.world.toWorld(30,28)));
+     for(let i=0;i<3;i++){ const u=g.spawnUnit('maus',1,...g.world.toWorld(33,29+i)); u.orderHarvest(g.kales[0]); } for(let i=0;i<3;i++) g.spawnUnit('fan',1,...g.world.toWorld(26+i,34)); },
+   waves:[ {t:20, units:{bote:3}, from:[3,3], target:'raum', msg:'Licensing issues. Premises to be vacated by end of month.', msgWho:'bauamt'}, {t:50, units:{bote:3,makler:1}, from:[52,3], target:'raum'}, {t:80, units:{bote:4,makler:2}, from:[52,52], target:'raum'}, {t:105, units:{inspektor:2,bote:3}, from:[3,52], target:'raum'}, {t:130, units:{makler:3,bote:4,inspektor:1}, from:[[3,3],[52,52]], target:'raum', msg:'Dann kam Theo. Schneller. Härter. Keine Rücksicht auf Struktur oder Form.', msgWho:'sys'} ],
+   triggers:[ {when:g=>g.time>5, run:g=>g.say('sys','John begann. Langsam. Schwer. Jeder Ton wie ein Stein, der ins Wasser fällt.')}, {when:g=>g.time>145, run:g=>g.say('sys','Für zwei Minuten und vierzig Sekunden war alles richtig.')} ],
+   lose:g=>!g.buildings.some(b=>b.type==='raum'&&b.alive), loseText:()=>'Der Raum ist weg. Nicht durch Skandale. Durch Zettel.',
+   outro:[['sys','Dann brach es auseinander.'],['john','Du gehst zu weit.'],['theo','Ich gehe, wo die Musik mich hinbringt.'],['john','Die Musik hat eine Struktur. Ohne die ist es nur Lärm.'],['theo','Lärm ist ehrlicher als alles, was wir Ordnung nennen.'],['sys','Es war kein Streit. Schlimmer: Es war die Wahrheit von beiden.']]
+ },
+ { index:3, chapter:'Kapitel III–IV', title:'Winter in Camden – Fucker Sucker', caption:'Die schwarzen Monate. Die Heizung gab an einem Dienstag den Geist auf.', seed:21, unlock:['fsucker'],
+   fog:0x0c0d12, sky:0x8aa0c8, hemi:0.7, sunI:0.7, rain:true, fogNear:40, fogFar:130, camDist:42,
+   map:{w:58,h:58,ground:'concrete',brick:0x3a2f2a,paint:(()=>{ const o=cityPaint(58,58,{street:12,seed:21,openChance:0.2}); clearArea(o,'cobble',8,38,12,12); clearArea(o,'dirt',22,44,4,4); clearArea(o,'dirt',6,28,4,4); clearArea(o,'asphalt',40,6,14,14); clearArea(o,'asphalt',26,10,8,8); return o; })()},
+   startKale:300, startRuf:40, enemyActive:true, enemyCap:16, spawnMul:1.2,
+   brief:[['sys','Der Londoner Winter kam nicht wie ein Gast. Er kam wie ein Einzug. Die Heizung wurde einfach kälter, dann kalt, dann weg.'],['sys','Draußen ist es kalt: Wer sich weit von den eigenen Gebäuden entfernt, verliert langsam Kraft. In der Nähe erholt man sich.'],['theo','Hör auf.'],['john','Nein. Spiel ihn nochmal.'],['sys','So entstand der zweite Song. Fucker Sucker. Theo sagte, es sei eine Haltung. John sagte, es sei ein grammatikalisches Problem.'],['sys','Theo hat eine neue Fähigkeit: F. Das Bauamt sitzt im Nordosten. Reißt es ab.']],
+   objectives:[ {text:'Das Bauamt abreißen', check:g=>!g.buildings.some(b=>b.type==='amt'&&b.alive)}, {text:'Beide Eigentumswohnungen abreißen', optional:true, check:g=>!g.buildings.some(b=>b.type==='condo'&&b.alive)} ],
+   setup(g){ g.spawnBuilding('kaefig',1,13,43); g.spawnBuilding('proberaum',1,17,47); g.spawnBuilding('heuturm',1,10,38); g.spawnKale(23,45,350); g.spawnKale(7,29,350);
+     g.spawnBuilding('amt',2,47,12); g.spawnBuilding('condo',2,29,13); g.spawnBuilding('condo',2,43,20); g.spawnBuilding('kran',2,50,18);
+     g.units.push(new Unit('john',1,...g.world.toWorld(12,40))); g.units.push(new Unit('theo',1,...g.world.toWorld(15,40)));
+     for(let i=0;i<3;i++){ const u=g.spawnUnit('maus',1,...g.world.toWorld(19,44+i)); u.orderHarvest(g.kales[0]); } for(let i=0;i<2;i++) g.spawnUnit('fan',1,...g.world.toWorld(14+i,46)); },
+   tick(g,dt){ g.coldT=(g.coldT||0)+dt; if(g.coldT<1) return; g.coldT=0; const own=g.buildings.filter(b=>b.team===1&&b.alive); g.units.forEach(u=>{ if(u.team!==1||!u.alive) return; const warm=own.some(b=>dist2(u.x,u.z,b.x,b.z)<144); if(warm) u.hp=Math.min(u.maxHp,u.hp+2); else if(u.hp>u.maxHp*0.25) u.hp-=1.5; }); },
+   waves:[ {t:60, units:{bote:3,makler:1}, from:[44,16]}, {t:150, units:{bote:3,makler:2,inspektor:1}, from:[44,16]}, {t:260, units:{bagger:1,bote:3}, from:[44,16], msg:'Ein Bagger. Eigentumswohnungen, gebaut auf den Ruinen von Kellerbars.', msgWho:'sys'} ],
+   repeat:{after:300, every:85, units:{bote:3,makler:2}, from:[44,16], grow:0.6},
+   triggers:[ {when:g=>g.time>8, run:g=>g.say('sys','Fucker Sucker: Weniger Kathedrale. Mehr Kellerclub. Taste F, wenn Theo gewählt ist. Kostet 50 Ruf.',8)}, {when:g=>g.time>40, run:g=>{ g.say('john','Sie hat keinen Mittelteil.'); g.say('theo','Braucht sie nicht.'); g.say('john','Jedes Stück braucht einen Mittelteil. Sonst ist es nur ein Anfang mit einem Ende.'); g.say('theo','Klingt nach einem Leben.'); }} ],
+   lose:g=>!(g.john&&g.john.alive)&&!(g.theo&&g.theo.alive) || !g.buildings.some(b=>b.type==='kaefig'&&b.alive), loseText:()=>'Der Winter hat gewonnen. In Camden ist das kein Notfall, das ist November.',
+   outro:[['sys','Es gab eine Nacht im Dezember. Kein Konzert. Kein Publikum. Kein Anlass.'],['theo','Glaubst du, dass das hier – das alles – irgendeine Bedeutung hat?'],['john','Das ist die falsche Frage. Die richtige ist: Macht es Sinn, so weiterzumachen.'],['theo','Und? Macht es Sinn?'],['john','Für mich schon. Was du daraus machst, ist dein Problem.'],['sys','Es war das Netteste, was sie sich je gesagt hatten.']]
+ },
+ { index:4, chapter:'Kapitel V', title:'Der Kale-Komplex', caption:'It was just kale. Nothing is ever just kale.', seed:33,
+   fog:0x0a0c0a, sky:0x7f9cb0, hemi:0.6, rain:false, camDist:44,
+   map:{w:60,h:60,ground:'cobble',paint:(()=>{ const o=cityPaint(60,60,{street:12,seed:33,openChance:0.35}); clearArea(o,'cobble',6,42,12,12); clearArea(o,'dirt',24,24,12,12); clearArea(o,'asphalt',44,6,12,12); clearArea(o,'asphalt',6,6,8,8); clearArea(o,'asphalt',46,44,8,8); return o; })(), signs:[{x:30,z:22,text:'GRÜNKOHL',fg:'#7fc45c',bg:'#102010'}]},
+   startKale:200, startRuf:30, enemyActive:true, enemyCap:18,
+   brief:[['sys','Jemand hatte Grünkohl stehen lassen. Er lag auf dem Küchentisch wie ein Objekt ohne Bedeutung. Bis er Bedeutung bekam.'],['theo','Wir brauchen mehr.'],['john','Wir haben genug.'],['theo','Das sagst du über alles.'],['john','Nicht beim Grünkohl. Beim Grünkohl stimmt es nie.'],['sys','Das große Feld liegt in der Mitte. Das Bauamt will es auch. Ein Grünkohl-Lager neben dem Feld verkürzt die Wege und zahlt Bonus.']],
+   objectives:[ {text:'900 Grünkohl ernten', check:g=>(g.kaleTotal||0)>=900}, {text:'Alle Eigentumswohnungen abreißen', optional:true, check:g=>!g.buildings.some(b=>b.type==='condo'&&b.alive)} ],
+   setup(g){ g.spawnBuilding('kaefig',1,11,47); g.spawnBuilding('proberaum',1,15,51); g.spawnKale(14,42,200); [[27,27],[31,27],[27,31],[31,31],[29,29]].forEach(p=>g.spawnKale(p[0],p[1],320));
+     g.spawnBuilding('buero',2,49,11); g.spawnBuilding('condo',2,45,16); g.spawnBuilding('condo',2,52,16); g.spawnBuilding('kran',2,47,20);
+     g.units.push(new Unit('john',1,...g.world.toWorld(10,44))); g.units.push(new Unit('theo',1,...g.world.toWorld(13,44)));
+     for(let i=0;i<4;i++){ const u=g.spawnUnit('maus',1,...g.world.toWorld(16,45+i)); u.orderHarvest(g.kales[0]); } for(let i=0;i<2;i++) g.spawnUnit('fan',1,...g.world.toWorld(12+i,50)); g.spawnUnit('roadie',1,...g.world.toWorld(9,50)); },
+   waves:[ {t:70, units:{makler:2,bote:2}, from:[47,22]}, {t:160, units:{bote:4,inspektor:2}, from:[47,22]}, {t:250, units:{bagger:1,makler:2,bote:2}, from:[47,22]} ],
+   repeat:{after:300, every:80, units:{bote:3,makler:2,inspektor:1}, from:[47,22], grow:0.6},
+   triggers:[ {when:g=>(g.kaleTotal||0)>=450, run:g=>{ g.say('theo','Das ist das Problem mit dir. Du kennst kein Genug.'); g.say('john','Das ist das Problem mit dir. Du kennst nichts anderes.'); }} ],
+   lose:g=>!(g.john&&g.john.alive)&&!(g.theo&&g.theo.alive) || !g.buildings.some(b=>b.type==='kaefig'&&b.alive), loseText:()=>'Der Grünkohl ist weg. Das Bauamt hat ihn. Alles andere auch.',
+   outro:[['sys','Stille. Dann das Rascheln von Heu. Keiner wusste, wer Recht hatte. Keiner sagte das.']]
+ },
+ { index:5, chapter:'Kapitel VI', title:'Die Stadt, die sich selbst frisst', caption:'Camden. End of the 90s. The city didn’t throw them out. It just stopped knowing them.', seed:44,
+   fog:0x0a0a0d, sky:0x6b7fa8, rain:true, camDist:44, spawnMul:0.9,
+   map:{w:62,h:62,ground:'cobble',paint:(()=>{ const o=cityPaint(62,62,{street:12,seed:44,openChance:0.3}); clearArea(o,'cobble',6,44,12,12); clearArea(o,'dirt',20,50,4,4); clearArea(o,'dirt',4,34,4,4); clearArea(o,'asphalt',40,4,18,18); clearArea(o,'asphalt',56,52,6,8); clearArea(o,'asphalt',24,28,8,8); return o; })(), signs:[{x:49,z:2,text:'LUXURY APARTMENTS · SOLD',fg:'#0a0a0a',bg:'#e6dfd0'}]},
+   startKale:320, startRuf:40, enemyActive:true, enemyCap:20,
+   brief:[['sys','London veränderte sich auf eine Art, die keine Meinung brauchte. Nur Arithmetik. Die Mieten stiegen. Die Venues schlossen.'],['theo','Wir suchen uns einen neuen Raum.'],['john','Es gibt keinen neuen Raum. Die Räume, die es noch gibt, werden nächstes Jahr auch Zettel haben.'],['theo','Dann kämpfen wir dagegen.'],['john','Wogegen? Gegen Geld? Gegen Grundstückspreise?'],['sys','Das Immobilien-Büro baut alle 50 Sekunden eine neue Eigentumswohnung. Reißt das Büro ab. Dann: der Van. München wartet.']],
+   objectives:[ {text:'Das Immobilien-Büro abreißen', check:g=>!g.buildings.some(b=>b.type==='buero'&&b.alive), onDone:g=>{ g.flags.buero=true; g.say('sys','Irgendwann in diesen letzten Wochen verschwanden die Mäuse. Lautlos. Unangekündigt.'); g.units.filter(u=>u.type==='maus'&&u.team===1&&u.alive).forEach(u=>{ u.team=0; u.selected=false; u.ring.material.color.setHex(0x8a8580); u.orderMove(...g.world.toWorld(49,12)); }); g.selected=g.selected.filter(s=>s.team===1); UI.selectionChanged(); setTimeout(()=>{ if(game===g){ g.say('theo','Die Mäuse sind gentrifiziert worden.'); g.say('john','So könnte man es nennen.'); g.say('theo','Das ist das Traurigste, was ich je gehört habe.'); g.say('john','Oder das Konsequenteste.'); } },6000); }},
+     {text:'John und Theo zum Van (Südosten)', check:g=>{ if(!g.flags.buero) return false; const v=g.buildings.find(b=>b.type==='van'); return v&&g.john&&g.john.alive&&g.theo&&g.theo.alive&&g.john.distTo(v)<3&&g.theo.distTo(v)<3; }} ],
+   setup(g){ g.spawnBuilding('kaefig',1,11,49); g.spawnBuilding('proberaum',1,15,53); g.spawnBuilding('buehne',1,8,54); g.spawnBuilding('van',1,58,57); g.spawnKale(21,51,350); g.spawnKale(5,35,350); g.spawnKale(27,31,300);
+     g.spawnBuilding('buero',2,49,11); g.spawnBuilding('kran',2,43,16); g.spawnBuilding('kran',2,55,16); g.spawnBuilding('condo',2,45,8); g.spawnBuilding('condo',2,54,8);
+     g.units.push(new Unit('john',1,...g.world.toWorld(10,46))); g.units.push(new Unit('theo',1,...g.world.toWorld(13,46)));
+     for(let i=0;i<4;i++){ const u=g.spawnUnit('maus',1,...g.world.toWorld(17,48+i)); u.orderHarvest(g.kales[0]); } for(let i=0;i<3;i++) g.spawnUnit('fan',1,...g.world.toWorld(11+i,52)); g.spawnUnit('roadie',1,...g.world.toWorld(9,51)); g.spawnUnit('roadie',1,...g.world.toWorld(14,51)); g.condoT=50; },
+   tick(g,dt){ if(g.flags.buero) return; g.condoT-=dt; if(g.condoT<=0){ g.condoT=50; const condos=g.buildings.filter(b=>b.type==='condo'&&b.alive); if(condos.length>=7) return; const hq=g.buildings.find(b=>b.type==='kaefig'&&b.alive)||g.john; const src=condos[Math.floor(Math.random()*condos.length)]||g.buildings.find(b=>b.type==='buero'); if(!src||!hq) return; const [sx,sz]=g.world.toCell(src.x,src.z); const [hx,hz]=g.world.toCell(hq.x,hq.z); const dx=Math.sign(hx-sx), dz=Math.sign(hz-sz); for(let tr=0;tr<30;tr++){ const cx=sx+dx*(4+Math.floor(Math.random()*5))+Math.floor(Math.random()*7-3), cz=sz+dz*(4+Math.floor(Math.random()*5))+Math.floor(Math.random()*7-3); if(g.placeValidAny('condo',cx,cz) && dist2(...g.world.toWorld(cx,cz), hq.x,hq.z)>400){ const b=g.spawnBuilding('condo',2,cx,cz,false); b.def=Object.assign({},BUILDINGS.condo,{time:25}); g.say('bauamt','Bauantrag genehmigt. Eigentumswohnungen, wo vorher ein Keller war.',4); return; } } } },
+   waves:[ {t:45, units:{bote:3,makler:2}, from:[49,20]}, {t:130, units:{bagger:1,bote:4}, from:[49,20]}, {t:220, units:{makler:3,inspektor:2,bote:3}, from:[49,20]} ],
+   repeat:{after:260, every:75, units:{bote:3,makler:2,bagger:0}, from:[49,20], grow:0.7},
+   triggers:[ {when:g=>g.time>15, run:g=>g.say('sys','Der Backstage Club in München hat einen Slot frei. Spät im Programm, ein Freitagabend. Die Bühne zählt.',7)}, {when:g=>g.flags.buero&&g.time>0, run:g=>{ g.say('theo','Sepultura haben dort gespielt.',4); g.say('john','Ich weiß.',3); g.say('theo','Wir fahren.',3); g.say('john','Ja. Wir fahren.',4); }} ],
+   lose:g=>!(g.john&&g.john.alive)||!(g.theo&&g.theo.alive), loseText:()=>'Einer von beiden fehlt. Zusammen ist es was anderes. Einzeln ist es zu wenig.',
+   outro:[['sys','Der Raum ohne Namen überlebte länger als die meisten. Aber eines Morgens – ein Dienstag, natürlich ein Dienstag – hing ein Zettel an der Tür.'],['theo','London will uns nicht mehr.'],['john','London will gar nichts. Städte wollen nichts. Sie entwickeln sich einfach.'],['sys','Der Weg nach München führte durch Süddeutschland. Jemand hatte von Lörrach geredet.']]
+ },
+ { index:6, chapter:'Kapitel VII–VIII', title:'Lörrach – Was der Sommer nimmt', caption:'Lörrach. Summer. He didn’t need words. Neither did Theo.', seed:55,
+   fog:0xc9a97a, fogNear:50, fogFar:150, sky:0xffe2b0, groundLight:0x6a5030, hemi:0.9, sun:0xffd9a0, sunI:1.5, rain:false, camDist:40, heat:true, heatTime:200,
+   map:{w:64,h:44,ground:'dry',treeDensity:0.035,tree:0x6a7a3a,brick:0x8a6a4a,paint:(()=>{ const o=[{t:'asphalt',x1:4,z1:22,x2:60,z2:22,w:3}]; for(let i=0;i<4;i++){ o.push({t:'block',x:6+i*6,z:15,w:3,h:2}); o.push({t:'block',x:8+i*6,z:27,w:3,h:2}); } o.push({t:'water',x1:34,z1:0,x2:40,z2:43,w:3}); clearArea(o,'dirt',36,20,3,5); clearArea(o,'grass',50,8,14,30); return o; })(), signs:[{x:30,z:12,text:'LÖRRACH · DREILÄNDERECK',fg:'#f2ede4',bg:'#5a3a22'},{x:56,z:4,text:'WALD',fg:'#dfe8c0',bg:'#2f4a2a'}]},
+   startKale:0, build:[], train:[], enemyActive:false,
+   brief:[['sys','Lörrach ist keine Stadt, die einen empfängt. Sie ist einfach da. Dreiländereck, als würde der Kontinent hier nicht wissen, wem der Boden gehört.'],['theo','Das ist nicht London.'],['john','Nein.'],['sys','Die Hitze lag schwer über Lörrach. John aß weniger. Dann kam die Atmung.'],['sys','Keine Gegner. Kein Bauen. Nur ein Weg zum Waldrand im Osten, und John wird langsamer, je heißer es wird. Die Brücke liegt in der Mitte.']],
+   objectives:[ {text:'John und Theo zum Waldrand bringen', check:g=>{ const w=g.buildings.find(b=>b.type==='wald'); return w&&g.john&&g.john.alive&&g.theo&&g.theo.alive&&g.john.distTo(w)<4&&g.theo.distTo(w)<4; }} ],
+   setup(g){ g.spawnBuilding('kaefig',1,8,22); g.spawnBuilding('wald',0,58,10); g.units.push(new Unit('john',1,...g.world.toWorld(10,20))); g.units.push(new Unit('theo',1,...g.world.toWorld(12,20))); },
+   triggers:[ {when:g=>g.time>6, run:g=>{ g.say('john','Ich weiß nicht, ob die Zeit stimmt.'); g.say('theo','Wann dann, wenn nicht jetzt?'); g.say('john','Fahr du. Spiel allein.'); g.say('theo','Das ist keine Option.'); g.say('theo','Weil ich ohne dich nicht derselbe bin.'); g.say('sys','Es war das erste Mal, dass er das sagte.'); }},
+     {when:g=>g.heat>0.4, run:g=>{ g.say('theo','Es wird wärmer hier.'); g.say('john','Ich bevorzuge London im Oktober. Wenn es grau wird, aber noch nicht kalt.'); g.say('theo','Ja. Ich auch.'); }},
+     {when:g=>g.heat>0.75, run:g=>{ g.say('sys','Ein leises, mühsames Arbeiten der Lunge. Als ob Luft holen eine Aufgabe geworden wäre, statt ein Reflex.'); g.say('theo','John—'); g.say('john','Schon gut. Ich weiß.'); }} ],
+   outro:[['sys','Kein langer Abschied, kein Drama. Nur zwei Wesen, die sich lange genug kannten, um zu wissen, dass manche Dinge keine Worte brauchten.'],['sys','John starb an einem Sommerabend in Lörrach. Die Luft war warm. Der Wald war still.'],['sys','Theo saß. Er lief nicht im Kreis. Nicht einmal jetzt. Das war das Traurigste daran.'],['theo','Du würdest sagen: Du verwechselst Bewegung mit Fortschritt. Ich weiß. Aber ich gehe trotzdem.'],['sys','Basel. Zwanzig Minuten. Ein Zug. Ein Kreuz auf weißem Grund.']]
+ },
+ { index:7, chapter:'Kapitel X–XII', title:'Pratteln – Die Z7', caption:'Pratteln. The night everything changed. Again.', seed:66,
+   fog:0x0b0d12, sky:0x9ab0d8, hemi:0.65, rain:false, camDist:42,
+   map:{w:62,h:50,ground:'concrete',brick:0x6a6a66,paint:(()=>{ const o=cityPaint(62,50,{street:12,seed:66,openChance:0.3}); clearArea(o,'cobble',4,20,10,10); clearArea(o,'asphalt',44,18,16,16); clearArea(o,'dirt',40,36,4,4); clearArea(o,'dirt',56,10,4,4); clearArea(o,'asphalt',0,0,6,6); clearArea(o,'asphalt',56,0,6,6); clearArea(o,'asphalt',0,44,6,6); return o; })(), signs:[{x:51,z:16,text:'Z7 · PRATTELN',fg:'#e6394a',bg:'#0a0a0a'},{x:8,z:18,text:'SMOKEY & BOUNTY',fg:'#b9b4c7',bg:'#1a1a22'}]},
+   startKale:400, startRuf:60, build:['proberaum','heuturm','lager','buehne','ampwall'], train:['maus','fan','roadie'], enemyActive:false, enemyCap:14, spawnMul:1.6, buildRadius:16,
+   brief:[['sys','Theo zog in ein Haus nahe Pratteln. Das war kein Zufall. Die Mitbewohner hießen Smokey und Bounty. British Shorthair. Beide grau, beide massiv.'],['cat','Du hörst die Musik. Du gehst nicht hin.'],['theo','Noch nicht.'],['cat','Warum noch nicht?'],['theo','Weil es sich falsch anfühlt ohne ihn.'],['cat','Ich weiß. Deshalb wirst du hingehen.'],['sys','Bringt Theo zur Z7 im Osten. Smokey und Bounty kommen mit. Dann: 2:40 halten. Noch einmal.']],
+   objectives:[ {text:'Theo zur Z7 bringen', check:g=>{ const z=g.buildings.find(b=>b.type==='z7'); return z&&g.theo&&g.theo.alive&&g.theo.distTo(z)<4; }, onDone:g=>{ g.flags.z7=g.time; g.mission.enemyActive=true; const z=g.buildings.find(b=>b.type==='z7'); const a=g.spawnUnit('adriana',1,z.x-3,z.z+6), s=g.spawnUnit('susanna',1,z.x+3,z.z+6); g.spawnBuilding('kaefig',1,47,30); g.spawnBuilding('proberaum',1,52,30); g.say('sys','Zwei Reihen weiter. Adriana und Susanna. Und dann passierte etwas, das er nicht kontrollieren konnte.'); g.say('theo','(gurrt)',3); g.say('adriana','Kennen wir uns?'); g.say('theo','Noch nicht. Aber das ist lösbar.'); g.say('susanna','Du machst gerade ein Geräusch.'); g.say('theo','Weil manche Situationen keine andere Reaktion zulassen.'); g.say('bauamt','Baubehörde Basel-Landschaft. Lärmschutz. Der Betrieb ist einzustellen.',5); g.log('Käfig und Proberaum stehen neben der Z7. Jetzt bauen und halten.'); UI.refreshObjectives(); }},
+     {text:'Die Z7 2:40 lang halten', check:g=>g.flags.z7!==undefined && g.time-g.flags.z7>=160 && g.buildings.some(b=>b.type==='z7'&&b.alive)} ],
+   timer:g=>{ if(g.flags.z7===undefined) return null; const t=Math.max(0,160-(g.time-g.flags.z7)); return `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`; },
+   setup(g){ g.spawnBuilding('z7',1,52,24); g.spawnKale(41,37,350); g.spawnKale(57,11,350); g.spawnBuilding('amt',2,3,3); g.spawnBuilding('amt',2,59,3); g.spawnBuilding('amt',2,3,47);
+     g.units.push(new Unit('theo',1,...g.world.toWorld(8,24))); g.spawnUnit('smokey',1,...g.world.toWorld(6,26)); g.spawnUnit('bounty',1,...g.world.toWorld(10,26)); },
+   tick(g,dt){ if(g.flags.z7===undefined) return; g.wT=(g.wT||40)-dt; if(g.wT<=0){ g.wT=32; const k=Math.floor((g.time-g.flags.z7)/32); const from=[[3,5],[58,5],[3,45]][k%3]; g.launchWave({units:{bote:2+k, makler:Math.floor(k/2), inspektor:k>=3?1:0, bagger:k>=4?1:0}, from, target:'z7'}); } },
+   triggers:[ {when:g=>g.time>10, run:g=>{ g.say('cat','Du bist der Theo unter den Katern.',4,'Theo'); g.say('bounty','Ich weiß nicht, wer Theo ist.'); g.say('theo','Ich bin Theo.'); g.say('bounty','Dann bist du der Bounty unter den Meerschweinchen.'); }}, {when:g=>g.flags.z7!==undefined&&g.time-g.flags.z7>140, run:g=>g.say('sys','Das hier ist gut. Das hier bin ich. Das hier gehört zu dem, was ich bin, egal was passiert ist.')} ],
+   lose:g=>!(g.theo&&g.theo.alive) || !g.buildings.some(b=>b.type==='z7'&&b.alive), loseText:g=>(g.theo&&g.theo.alive)?'Die Z7 ist dunkel. Zu früh.':'Ohne Theo gurrt niemand.',
+   outro:[['susanna','Wir kommen öfter her.'],['theo','Das ist die beste Nachricht seit Monaten.'],['sys','Später, die Z7 dunkel, Pratteln still: Du hättest das nicht gemacht. Einfach hingehen und gurren, bis sie reden. Stimmt. Aber Theo war nicht John. Das war lange ein Problem gewesen. Heute Abend war es keins.'],['sys','Theo starb nicht laut. Das überraschte alle, die ihn kannten. Adriana und Susanna blieben. Smokey und Bounty beobachteten.'],['sys','Die Käfige existieren nicht mehr. Der Sound bleibt. Irgendwo in Pratteln gurrte jemand. Das war genug.']]
+ }
+];
+function convert(g,u){ u.team=1; u.ring.material.color.setHex(0xe6394a); Audio.squeak(); fx.text(u.x,u.z,'Fan!','#e6394a'); const k=g.nearestKale(u.x,u.z); if(k) u.orderHarvest(k); else u.orderStop(); g.log('Eine Maus bleibt. Wegen der Musik. Sagt Theo.'); }
+Game.prototype.placeValidAny=function(type,cx,cz){ const def=BUILDINGS[type]; const size=def.size; const r=Math.floor(size/2); const sx=size%2?cx-r:cx-r+1, sz=size%2?cz-r:cz-r+1; const w=this.world; for(let dx=0;dx<size;dx++) for(let dz=0;dz<size;dz++){ const x=sx+dx, z=sz+dz; if(!w.free(x,z)) return false; if(w.type[w.idx(x,z)]==='water') return false; } return true; };
+
+/* ---------- Ablauf: Menü, Briefing, Debrief, Pause, Hilfe ---------- */
+const Flow = {
+  current:null,
+  overlay(html){ $('screen').innerHTML=html; $('overlay').classList.remove('off'); },
+  hide(){ $('overlay').classList.add('off'); },
+  menu(){ if(game){ UI.stop(); game.dispose(); game=null; } const prog=store.get('progress',0);
+    this.overlay(`<div class="eyebrow">Two Cages, One Sound · Das Strategiespiel</div><h1>Camden <em>Command</em></h1><p style="margin-top:10px">Zwei Käfige. Zwei Welten. Ein Sound. Und ein Bauamt, das Zettel verteilt. Echtzeitstrategie durch alle Kapitel: Grünkohl ernten, Proberäume bauen, Räume halten, die Stadt überleben.</p>
+      <ul class="missions">${MISSIONS.map(m=>`<li><button ${m.index>prog?'disabled':''} data-m="${m.index}"><span class="n">${m.index+1}</span><span><span class="t">${m.title}</span><br><span class="s">${m.chapter}</span></span><span class="st ${m.index<prog?'done':''}">${m.index<prog?'gespielt':m.index===prog?'offen':'gesperrt'}</span></button></li>`).join('')}</ul>
+      <div class="row" style="margin-top:18px"><button class="btn ghost" id="m-help">Steuerung</button>${prog>0?'<button class="btn ghost" id="m-reset">Fortschritt löschen</button>':''}<a class="btn ghost" href="https://chefcat-2026.github.io/two-cages-one-sound/">Zum Buch</a></div>
+      <p class="footnote">Nach dem Roman von U. Rinner. Läuft im Browser, am besten mit Maus und Tastatur. Am Handy: Tippen wählt, langes Tippen oder Tippen auf freien Boden schickt los, Ziehen bewegt die Kamera, zwei Finger zoomen.</p>`);
+    document.querySelectorAll('.missions button').forEach(b=>b.onclick=()=>this.briefing(MISSIONS[+b.dataset.m]));
+    $('m-help').onclick=()=>this.help(false); const r=$('m-reset'); if(r) r.onclick=()=>{ store.set('progress',0); store.set('abilities',{}); this.menu(); };
+  },
+  briefing(m){ this.current=m; const obj=m.objectives.map(o=>`<li>${typeof o.text==='function'?o.text({}):o.text}${o.optional?' (optional)':''}</li>`).join('');
+    this.overlay(`<div class="eyebrow">Mission ${m.index+1} · ${m.chapter}</div><h2>${m.title}</h2><div class="caption">${m.caption}</div>
+      <div class="brief"><div class="lines">${m.brief.map(([w,l])=>`<div><b class="${w}">${this.name(w)}</b>${l}</div>`).join('')}</div><div class="obj"><h4>Ziele</h4><ul>${obj}</ul></div></div>
+      <div class="row" style="margin-top:18px"><button class="btn solid" id="b-start">Mission starten</button><button class="btn ghost" id="b-back">Zurück</button></div>`);
+    $('b-start').onclick=()=>this.start(m); $('b-back').onclick=()=>this.menu();
+  },
+  name(w){ return {theo:'Theo',john:'John',sys:'',cat:'Smokey',bauamt:'Das Bauamt',adriana:'Adriana',susanna:'Susanna',bounty:'Bounty'}[w]||''; },
+  start(m){ if(game){ UI.stop(); game.dispose(); game=null; } Audio.init(); Input.attackMode=false; Input.groups={}; game=new Game(m); game.kaleTotal=0; const addK=game.addKale.bind(game); game.addKale=n=>{ addK(n); game.kaleTotal+=n; }; UI.start(); this.hide(); if(Audio.on) Audio.startRain(); },
+  debrief(m, won){ UI.stop(); const lines = won ? m.outro : [['sys', game.loseText||'Die Band ist am Ende.']]; const last = won && m.index===MISSIONS.length-1;
+    this.overlay(`<div class="eyebrow">${won?'Mission erfüllt':'Mission gescheitert'} · ${m.title}</div><h2>${won?(last?'Das Ende, das keines war':'Weiter.'):'Nochmal.'}</h2>
+      <div class="brief" style="margin-top:14px"><div class="lines">${lines.map(([w,l])=>`<div><b class="${w}">${this.name(w)}</b>${l}</div>`).join('')}</div></div>
+      <div class="row" style="margin-top:18px">${won&&!last?'<button class="btn solid" id="d-next">Nächste Mission</button>':''}<button class="btn ${won?'ghost':'solid'}" id="d-again">${won?'Nochmal spielen':'Nochmal versuchen'}</button><button class="btn ghost" id="d-menu">Menü</button></div>
+      ${last?'<p class="footnote">Born in Borehamwood. Died in Basel. Lived everywhere in between. · <a href="https://chefcat-2026.github.io/two-cages-one-sound/">Das Buch</a></p>':''}`);
+    const n=$('d-next'); if(n) n.onclick=()=>this.briefing(MISSIONS[m.index+1]); $('d-again').onclick=()=>this.briefing(m); $('d-menu').onclick=()=>this.menu();
+  },
+  pause(){ if(!game) return; this.paused=true; this.overlay(`<div class="eyebrow">Pause · ${game.mission.title}</div><h2>Kurz Stille.</h2><div class="row" style="margin-top:18px"><button class="btn solid" id="p-cont">Weiter</button><button class="btn ghost" id="p-restart">Mission neu starten</button><button class="btn ghost" id="p-help">Steuerung</button><button class="btn ghost" id="p-menu">Zum Menü</button></div>`);
+    $('p-cont').onclick=()=>{ this.paused=false; this.hide(); }; $('p-restart').onclick=()=>{ this.paused=false; this.start(game.mission); }; $('p-help').onclick=()=>this.help(true); $('p-menu').onclick=()=>{ this.paused=false; this.menu(); }; },
+  help(inGame){ if(inGame) this.paused=true;
+    this.overlay(`<div class="eyebrow">Steuerung</div><h2>So geht das.</h2><div class="help">
+      <div><span>Figur wählen</span><kbd>Linksklick</kbd></div><div><span>Mehrere wählen</span><kbd>Ziehen</kbd></div><div><span>Bewegen · Angreifen · Ernten</span><kbd>Rechtsklick</kbd></div><div><span>Zur Auswahl hinzufügen</span><kbd>Shift</kbd></div>
+      <div><span>Gleiche Einheiten wählen</span><kbd>Doppelklick</kbd></div><div><span>Angriffsbewegung</span><kbd>A</kbd></div><div><span>Anhalten</span><kbd>S</kbd></div><div><span>John · Theo wählen</span><kbd>J</kbd> <kbd>T</kbd></div>
+      <div><span>Kamera bewegen</span><kbd>Pfeile</kbd> <kbd>Mausrand</kbd> <kbd>Mitte ziehen</kbd></div><div><span>Kamera drehen</span><kbd>Q</kbd> <kbd>E</kbd></div><div><span>Zoom</span><kbd>Mausrad</kbd></div><div><span>Zur Basis</span><kbd>M</kbd></div>
+      <div><span>Gruppe speichern · rufen</span><kbd>Strg+1…5</kbd> <kbd>1…5</kbd></div><div><span>Gurren · Fucker Sucker</span><kbd>G</kbd> <kbd>F</kbd></div><div><span>Der schwere Riff · Der Blick</span><kbd>R</kbd> <kbd>B</kbd></div><div><span>Bau abbrechen · Auswahl leeren</span><kbd>Esc</kbd></div></div>
+      <p style="margin-top:14px"><b>Grünkohl</b> kommt von den Feldern, Mäuse tragen ihn zum Käfig oder zum Lager. <b>Ruf</b> entsteht auf der Bühne und mit jedem Zettel, der nicht klebt. Ruf bezahlt die Fähigkeiten der Helden.</p>
+      <div class="row" style="margin-top:18px"><button class="btn solid" id="h-back">${inGame?'Weiter':'Zurück'}</button></div>`);
+    $('h-back').onclick=()=>{ if(inGame){ this.paused=false; this.hide(); } else this.menu(); }; }
+};
+
+/* ---------- Hauptschleife ---------- */
+let lastT=performance.now();
+function loop(t){ requestAnimationFrame(loop); const real=Math.min(0.05,(t-lastT)/1000); lastT=t; if(!game) return;
+  if(!Flow.paused && !game.over){ for(let i=0;i<game.speed;i++) game.update(real); } else if(game.over){ fx.update(real); game.units.forEach(u=>{ if(u.dead) u.update(real); else u.sync(real,false); }); }
+  Input.update(real); updateCamera(); renderer.render(scene,camera); }
+Input.init(); UI.init(); Flow.menu(); updateCamera(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
