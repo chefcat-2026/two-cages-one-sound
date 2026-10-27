@@ -197,8 +197,7 @@
   <canvas id="gl"></canvas>
   <div id="selbox"></div>
 
-  <div id="vignette"></div>
-  <div id="hud">
+    <div id="hud">
     <div id="alertArrow"><div class="tri"></div><div class="lbl">Angriff · Leertaste</div></div>
     <div id="topbar">
       <div class="brand">Camden Command</div>
@@ -206,6 +205,7 @@
       <div class="res kale"><span class="dot"></span><span id="r-kale">0</span><small>Grünkohl</small></div>
       <div class="res ruf"><span class="dot"></span><span id="r-ruf">0</span><small>Ruf</small></div>
       <button class="tb-btn" id="b-speed" title="Spielgeschwindigkeit">1×</button>
+      <button class="tb-btn" id="b-style" title="Darstellung: Tusche wie im Buch oder Farbe">Tusche</button>
       <button class="tb-btn" id="b-sound" title="Ton">Ton aus</button>
       <button class="tb-btn" id="b-help">Hilfe</button>
       <button class="tb-btn" id="b-menu">Menü</button>
@@ -371,8 +371,62 @@ function updateCamera(dt=0){
   sun.position.set(cam.x+30, 60, cam.z+20); sunTarget.position.set(cam.x, 0, cam.z);
   const s = 46 + cam.dist*0.5; sun.shadow.camera.left=-s; sun.shadow.camera.right=s; sun.shadow.camera.top=s; sun.shadow.camera.bottom=-s; sun.shadow.camera.updateProjectionMatrix();
 }
-function resize(){ const w=canvas.clientWidth||innerWidth, h=canvas.clientHeight||innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
-addEventListener('resize', resize); resize();
+/* ---------- Tusche: Bildnachbearbeitung wie in den Illustrationen (Kanten, Raster, Schwarz-Weiß mit Rot) ---------- */
+const Post = {
+  enabled: store.get('ink', true),
+  init(){
+    const dt=new THREE.DepthTexture(1,1); dt.type=THREE.UnsignedIntType; dt.format=THREE.DepthFormat;
+    this.rt=new THREE.WebGLRenderTarget(1,1,{depthTexture:dt, samples:0});
+    this.mat=new THREE.ShaderMaterial({
+      uniforms:{ tDiffuse:{value:this.rt.texture}, tDepth:{value:dt}, res:{value:new THREE.Vector2(1,1)}, near:{value:camera.near}, far:{value:camera.far}, time:{value:0}, ink:{value:1}, px:{value:1} },
+      vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`,
+      fragmentShader:`#include <packing>
+        uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform vec2 res; uniform float near; uniform float far; uniform float time; uniform float ink; uniform float px; varying vec2 vUv;
+        float lin(vec2 uv){ float d=texture2D(tDepth,uv).r; return -perspectiveDepthToViewZ(d,near,far); }
+        float lum(vec3 c){ return dot(c,vec3(0.299,0.587,0.114)); }
+        float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+        void main(){
+          vec2 o=px/res; vec3 c=texture2D(tDiffuse,vUv).rgb; vec3 col=toneMapping(c);
+          if(ink<0.5){ gl_FragColor=vec4(col,1.0); gl_FragColor=linearToOutputTexel(gl_FragColor); return; }
+          // Kanten aus der Tiefe (Silhouetten) und aus der Helligkeit (Innenlinien)
+          float z=lin(vUv); float e=0.0;
+          float zl=lin(vUv-vec2(o.x,0.)), zr=lin(vUv+vec2(o.x,0.)), zu=lin(vUv-vec2(0.,o.y)), zd=lin(vUv+vec2(0.,o.y));
+          float dz=(abs(zl-z)+abs(zr-z)+abs(zu-z)+abs(zd-z))/max(z,1.0);
+          e=smoothstep(0.035,0.09,dz);
+          float l=lum(col);
+          float ll=lum(toneMapping(texture2D(tDiffuse,vUv-vec2(o.x,0.)).rgb)), lr=lum(toneMapping(texture2D(tDiffuse,vUv+vec2(o.x,0.)).rgb)), lu=lum(toneMapping(texture2D(tDiffuse,vUv-vec2(0.,o.y)).rgb)), ld=lum(toneMapping(texture2D(tDiffuse,vUv+vec2(0.,o.y)).rgb));
+          float dl=abs(ll-lr)+abs(lu-ld); e=max(e, smoothstep(0.25,0.6,dl)*0.7);
+          // Farbe raus, Rot bleibt (wie in den Zeichnungen)
+          float mx=max(col.r,max(col.g,col.b)), mn=min(col.r,min(col.g,col.b)); float sat=(mx-mn)/max(mx,0.001);
+          float redness=smoothstep(0.25,0.6,sat)*smoothstep(0.15,0.45,col.r-max(col.g,col.b));
+          float cyan=smoothstep(0.3,0.6,sat)*smoothstep(0.1,0.3,min(col.g,col.b)-col.r)*0.45;
+          // Mitteltöne anheben: Tusche lebt vom Weiß des Papiers
+          float lt=pow(clamp(l,0.0,1.0),0.6);
+          float steps=5.0; float lp=floor(lt*steps+0.5)/steps; vec3 grey=vec3(mix(lt,lp,0.5));
+          grey=clamp((grey-0.5)*1.25+0.55,0.0,1.0); // Kontrast, Weiß bleibt Weiß
+          vec3 styl=mix(grey, col, max(redness,cyan));
+          // Rasterpunkte in den Schatten
+          float ang=0.7853; mat2 R=mat2(cos(ang),-sin(ang),sin(ang),cos(ang)); vec2 pc=R*(gl_FragCoord.xy/px)/4.5; float dd=length(fract(pc)-0.5);
+          float dark=smoothstep(0.42,0.08,lt); float rad=dark*0.42; float dots=smoothstep(rad+0.03,rad-0.06,dd)*dark;
+          styl*=1.0-dots*0.5;
+          // Papierkorn
+          styl+= (hash(floor(gl_FragCoord.xy/px))-0.5)*0.022;
+          // Tuschelinien
+          styl*=1.0-e*0.92;
+          // Vignette
+          vec2 q=vUv-0.5; styl*=1.0-dot(q,q)*0.4;
+          gl_FragColor=vec4(styl,1.0);
+          #include <encodings_fragment>
+        }`, depthTest:false, depthWrite:false });
+    this.scene=new THREE.Scene(); this.cam=new THREE.OrthographicCamera(-1,1,1,-1,0,1); this.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), this.mat));
+  },
+  resize(w,h){ const pr=renderer.getPixelRatio(); this.rt.setSize(Math.floor(w*pr),Math.floor(h*pr)); this.mat.uniforms.res.value.set(Math.floor(w*pr),Math.floor(h*pr)); this.mat.uniforms.px.value=pr; },
+  render(t){ this.mat.uniforms.time.value=t; this.mat.uniforms.ink.value=this.enabled?1:0; renderer.setRenderTarget(this.rt); renderer.render(scene,camera); renderer.setRenderTarget(null); renderer.render(this.scene,this.cam); },
+  toggle(){ this.enabled=!this.enabled; store.set('ink',this.enabled); applyStyleLighting(); return this.enabled; }
+};
+function applyStyleLighting(){ if(!game) return; const m=game.mission; const ink=Post.enabled; hemi.intensity=(m.hemi||0.55)*(ink?1.6:1); sun.intensity=(m.sunI||0.95)*(ink?1.3:1); renderer.toneMappingExposure=ink?1.35:1.15; }
+function resize(){ const w=canvas.clientWidth||innerWidth, h=canvas.clientHeight||innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); if(Post.rt) Post.resize(w,h); }
+Post.init(); addEventListener('resize', resize); resize();
 
 /* ---------- Material-Cache & Hilfsgeometrien ---------- */
 const matCache = new Map();
@@ -630,7 +684,7 @@ class World {
       if ((t==='grass'||t==='dry') && srand()<(spec.treeDensity||0.05) && !this.near(cx,cz,'block',1)){ const sc=0.7+srand()*0.8; const tx=x+(srand()-0.5), tz=z+(srand()-0.5); const c2=new THREE.Color(treeCol); c2.offsetHSL(0,0,(srand()-0.5)*0.12);
         statics.push(part(GEO.cyl,0x4a3424, 0.15,1.2*sc,0.15, tx,0.6*sc,tz)); statics.push(part(GEO.cone,c2.getHex(), 0.95*sc,2.3*sc,0.95*sc, tx,1.9*sc,tz)); if(srand()<0.5) statics.push(part(GEO.cone,c2.getHex(), 0.7*sc,1.6*sc,0.7*sc, tx,2.8*sc,tz)); }
       if ((t==='asphalt'||t==='cobble') && (cx+cz)%7===0 && this.near(cx,cz,'block',1) && srand()<0.55){ statics.push(part(GEO.cyl,0x222222, 0.07,3.4,0.07, x,1.7,z)); statics.push(part(GEO.cyl,0x222222, 0.05,0.9,0.05, x+0.4,3.3,z,0,0,Math.PI/2)); bulbs.push(part(GEO.sph,0xfff1c0, 0.2,0.16,0.2, x+0.8,3.25,z)); pools.push(part(GEO_CIRCLE,0xffe9b0, 2.2,2.2,1, x+0.8,0.03,z,-Math.PI/2,0,0)); }
-      if (t==='asphalt' && srand()<0.05){ const pud=mesh(GEO_CIRCLE, new THREE.MeshStandardMaterial({color:0x0b1622, roughness:0.08, metalness:0.7, transparent:true, opacity:0.85}), 0.9+srand(),0.6+srand()*0.6,1, x+(srand()-0.5),0.02,z+(srand()-0.5),false); pud.rotation.x=-Math.PI/2; pud.rotation.z=srand()*3; this.group.add(pud); }
+      if (t==='asphalt' && srand()<0.025){ const pud=mesh(GEO_CIRCLE, new THREE.MeshStandardMaterial({color:0x33465a, roughness:0.08, metalness:0.6, transparent:true, opacity:0.7}), 0.9+srand(),0.6+srand()*0.6,1, x+(srand()-0.5),0.02,z+(srand()-0.5),false); pud.rotation.x=-Math.PI/2; pud.rotation.z=srand()*3; this.group.add(pud); }
       if ((t==='cobble'||t==='asphalt') && srand()<0.012){ statics.push(part(GEO.box,0x2b2b2b, 0.8,1.0,0.8, x+(srand()-0.5)*1.2,0.5,z+(srand()-0.5)*1.2,0,srand(),0)); statics.push(part(GEO.box,0x3a3a3a, 0.9,0.08,0.9, x,1.02,z)); } // Mülltonne
     }
     if(statics.length){ const m=new THREE.Mesh(mergeParts(statics), new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.9})); m.castShadow=true; m.receiveShadow=true; this.group.add(m); }
@@ -822,7 +876,7 @@ class Game {
     seed=mission.seed||5; this.world=new World(mission.map);
     scene.fog = new THREE.Fog(mission.fog||0x0a0a0a, mission.fogNear||60, mission.fogFar||170); scene.background=new THREE.Color(mission.fog||0x0a0a0a);
     hemi.color.setHex(mission.sky||0x8fa3c9); hemi.groundColor.setHex(mission.groundLight||0x2a2420); hemi.intensity=mission.hemi||0.55; sun.color.setHex(mission.sun||0xffffff); sun.intensity=mission.sunI||0.95;
-    mission.setup(this);
+    mission.setup(this); applyStyleLighting();
     if(mission.rain||mission.snow) this.makeRain(!!mission.snow);
     this.dome=new THREE.Mesh(new THREE.SphereGeometry(300,24,12), new THREE.MeshBasicMaterial({map:Tex.sky(mission.skyTop||'#05060a', mission.skyHorizon||'#1b2130'), side:THREE.BackSide, fog:false, toneMapped:false})); scene.add(this.dome);
     if(mission.stars!==false){ const n=700; const pos=new Float32Array(n*3); for(let i=0;i<n;i++){ const a=rnd(Math.PI*2), e=rnd(1.2,0.12); pos[i*3]=Math.cos(a)*Math.cos(e)*290; pos[i*3+1]=Math.sin(e)*290; pos[i*3+2]=Math.sin(a)*Math.cos(e)*290; } const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); this.stars=new THREE.Points(g,new THREE.PointsMaterial({color:0xdde6ff,size:1.2,sizeAttenuation:false,fog:false,transparent:true,opacity:mission.starsOpacity??0.7})); this.dome.add(this.stars); }
@@ -936,12 +990,12 @@ const Input = {
       if(e.pointerType==='touch'){ this.touchT=performance.now(); } });
     c.addEventListener('pointermove', e=>{ this.mouse.x=e.clientX; this.mouse.y=e.clientY; if(!game) return;
       if(this.mouse.down){ const dx=e.clientX-this.mouse.sx, dy=e.clientY-this.mouse.sy; if(Math.abs(dx)+Math.abs(dy)>6) this.mouse.drag=true;
-        if(this.mouse.btn===1 || (this.pointerType==='touch'&&this.mouse.drag&&!game.placing)){ // Kamera ziehen
+        if(this.mouse.btn===1 || this.mouse.btn===2 || (this.pointerType==='touch'&&this.mouse.drag&&!game.placing)){ canvas.style.cursor='grabbing'; // Kamera ziehen
           const mdx=e.clientX-this.mouse.px, mdy=e.clientY-this.mouse.py; this.pan(-mdx*0.06*cam.dist/42, -mdy*0.06*cam.dist/42); }
         else if(this.mouse.btn===0 && this.mouse.drag && !game.placing){ UI.selbox(this.mouse.sx,this.mouse.sy,e.clientX,e.clientY); }
       }
       this.mouse.px=e.clientX; this.mouse.py=e.clientY; });
-    c.addEventListener('pointerup', e=>{ if(!game||!this.mouse.down) return; this.mouse.down=false; UI.selbox(null);
+    c.addEventListener('pointerup', e=>{ if(!game||!this.mouse.down) return; this.mouse.down=false; UI.selbox(null); canvas.style.cursor='default';
       const isTouch=e.pointerType==='touch'; const longPress = isTouch && (performance.now()-this.touchT>420);
       if(this.mouse.btn===1) return;
       if(this.mouse.drag){ if(this.mouse.btn===0 && !isTouch && !game.placing) this.boxSelect(this.mouse.sx,this.mouse.sy,e.clientX,e.clientY, e.shiftKey); return; }
@@ -953,6 +1007,7 @@ const Input = {
         if(hit.entity && !hit.entity.kaleObj){ if(dbl && !hit.entity.isBuilding && hit.entity.team===1){ game.select(this.visibleOfType(hit.entity.type), e.shiftKey); } else game.select([hit.entity], e.shiftKey && hit.entity.team===1); }
         else if(!e.shiftKey) game.select([]); }
     });
+    c.addEventListener('pointerleave', ()=>{ this.mouse.x=-1; this.mouse.y=-1; this.edgeT=0; });
     c.addEventListener('wheel', e=>{ e.preventDefault(); cam.tdist=clamp(cam.tdist+Math.sign(e.deltaY)*4, cam.minD, cam.maxD); }, {passive:false});
     // Pinch-Zoom
     let pinch=null; c.addEventListener('touchstart', e=>{ if(e.touches.length===2){ pinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); } }, {passive:true});
@@ -982,7 +1037,7 @@ const Input = {
     if(k['ArrowUp']||k['KeyW']) dz-=s; if(k['ArrowDown']||k['KeyS']) dz+=s; if(k['ArrowLeft']||k['KeyA']) dx-=s; if(k['ArrowRight']||k['KeyD']) dx+=s;
     if(k['KeyQ']) cam.yaw+=dt*1.6; if(k['KeyE']) cam.yaw-=dt*1.6;
     // Randscrollen (nur mit Maus, nicht am Touch)
-    if(this.pointerType!=='touch' && !this.mouse.down && document.hasFocus()){ const m=this.mouse; const W=innerWidth, H=innerHeight; const edge=18; let ex=0,ez=0; if(m.x<edge&&m.x>0) ex=-1; if(m.x>W-edge-236&&m.x<W-236) ex=1; if(m.y<edge+44&&m.y>44) ez=-1; if(m.y>H-edge&&m.y<H) ez=1; if(ex||ez){ this.edgeT=(this.edgeT||0)+dt; if(this.edgeT>0.15){ dx+=ex*s; dz+=ez*s; } } else this.edgeT=0; }
+    if(this.pointerType!=='touch' && !this.mouse.down && !Flow.paused){ const m=this.mouse; const W=innerWidth, H=innerHeight; const edge=22; let ex=0,ez=0; if(m.x<edge&&m.x>0) ex=-1; if(m.x>W-edge-236&&m.x<W-236) ex=1; if(m.y<edge+44&&m.y>44) ez=-1; if(m.y>H-edge&&m.y<H) ez=1; if(ex||ez){ this.edgeT=(this.edgeT||0)+dt; if(this.edgeT>0.06){ dx+=ex*s; dz+=ez*s; } } else this.edgeT=0; }
     if(dx||dz) this.pan(dx,dz);
     const hit=this.pick(this.mouse.x,this.mouse.y); UI.updateGhost(hit); UI.cursorFor(hit);
   },
@@ -1009,6 +1064,7 @@ const UI = {
     $('tab-u').onclick=()=>{this.tab='u'; $('tab-u').classList.add('active'); $('tab-b').classList.remove('active'); this.refreshBuild();};
     $('b-menu').onclick=()=>Flow.pause(); $('b-help').onclick=()=>Flow.help(true);
     $('b-sound').onclick=()=>{ const on=Audio.toggle(); $('b-sound').textContent=on?'Ton an':'Ton aus'; $('b-sound').classList.toggle('active',on); };
+    const styleBtn=()=>{ $('b-style').textContent=Post.enabled?'Tusche':'Farbe'; $('b-style').classList.toggle('active',Post.enabled); }; styleBtn(); $('b-style').onclick=()=>{ Post.toggle(); styleBtn(); };
     $('b-speed').onclick=()=>{ if(!game) return; game.speed = game.speed>=3?1:game.speed+1; $('b-speed').textContent=game.speed+'×'; };
     const mm=$('minimap'); const mmClick=e=>{ if(!game) return; const r=mm.getBoundingClientRect(); const u=(e.clientX-r.left)/r.width, v=(e.clientY-r.top)/r.height; const w=game.world; camTo((u-0.5)*w.W*CELL,(v-0.5)*w.H*CELL); Input.clampCam(); };
     $('alertArrow').onclick=()=>{ if(game&&game.lastAlert) camTo(game.lastAlert.x,game.lastAlert.z); };
@@ -1031,11 +1087,11 @@ const UI = {
       if(isB){ if(game.placing===type) b.classList.add('placing'); b.onclick=()=>{ this.setPlacing(game.placing===type?null:type); }; }
       else { const n=game.queue.filter(t=>t===type).length; if(n) b.insertAdjacentHTML('beforeend',`<span class="q">${n}</span>`); b.onclick=()=>game.enqueue(type); b.oncontextmenu=e=>{ e.preventDefault(); game.dequeue(type); }; }
       g.appendChild(b); });
-    $('sidehint').textContent = this.tab==='b' ? 'Gebäude wählen, dann auf freien Boden nahe der eigenen Basis klicken. Shift hält die Auswahl.' : 'Klick reiht ein, Rechtsklick nimmt raus. Mäuse ernten von selbst.';
+    $('sidehint').textContent = this.tab==='b' ? 'Gebäude wählen, dann auf freien Boden nahe der eigenen Basis klicken. Karte: rechte Maustaste halten und ziehen.' : 'Klick reiht ein, Rechtsklick nimmt raus. Mäuse ernten von selbst.';
   },
   setPlacing(type){ game.placing=type; if(this.ghost){ scene.remove(this.ghost); this.ghost=null; } if(type){ this.ghost=buildBuildingModel(type,1); this.ghost.traverse(o=>{ if(o.material&&!o.isLineSegments){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=0.55; } o.castShadow=false; }); const def=BUILDINGS[type]; const fp=mesh(GEO.plane, new THREE.MeshBasicMaterial({color:0x7fc45c, transparent:true, opacity:0.35, side:THREE.DoubleSide}), def.size*CELL, def.size*CELL, 1, 0,0.03,0,false); fp.rotation.x=-Math.PI/2; fp.name='fp'; this.ghost.add(fp); scene.add(this.ghost); this.hint(`${def.name} platzieren · Esc bricht ab`); } else this.hint(Input.attackMode?'Angriffsbewegung: Ziel anklicken':null); this.refreshBuild(); },
   updateGhost(hit){ if(!this.ghost||!hit) return; const [cx,cz]=game.world.toCell(hit.x,hit.z); const def=BUILDINGS[game.placing]; const [x,z]=game.world.toWorld(cx,cz); this.ghost.position.set(x+(def.size%2?0:CELL/2),0,z+(def.size%2?0:CELL/2)); const ok=game.placeValid(game.placing,cx,cz)&&game.canAfford(def); this.ghost.getObjectByName('fp').material.color.setHex(ok?0x7fc45c:0xe6394a); },
-  cursorFor(hit){ if(!game) return; let c='default'; if(game.placing) c='crosshair'; else if(Input.attackMode) c='crosshair'; else if(hit&&hit.entity){ if(hit.entity.team===2&&game.ownUnits().length) c='crosshair'; else c='pointer'; } canvas.style.cursor=c; },
+  cursorFor(hit){ if(!game||Input.mouse.down) return; let c='default'; if(game.placing) c='crosshair'; else if(Input.attackMode) c='crosshair'; else if(hit&&hit.entity){ if(hit.entity.team===2&&game.ownUnits().length) c='crosshair'; else c='pointer'; } canvas.style.cursor=c; },
   selectionChanged(){ const p=$('selpanel'); const sel=game.selected.filter(e=>e.alive); if(!sel.length){ p.classList.remove('on'); return; } p.classList.add('on'); const e=sel[0]; const def=e.def; $('sel-portrait').innerHTML=pic(e.type); $('sel-name').textContent = sel.length>1? `${def.name} +${sel.length-1}` : def.name; $('sel-desc').textContent = e.isBuilding&&e.progress<1 ? `Im Bau … ${Math.round(e.progress*100)} %` : def.desc; $('sel-hp').style.width=Math.round(100*e.hp/e.maxHp)+'%';
     const ab=$('abilities'); ab.innerHTML=''; if(!e.isBuilding&&e.team===1){ Object.entries(ABILITIES).forEach(([id,a])=>{ if(a.owner!==e.type) return; if(a.req&&!game.unlocked[a.req]) return; const b=document.createElement('button'); b.className='ab'; b.dataset.tip=a.tip; b.innerHTML=`<span class="ic">${a.ic}</span><span class="k">${a.key} · ${a.ruf}★</span><i class="cd"></i>`; b.onclick=()=>game.useAbility(id); b.dataset.id=id; ab.appendChild(b); }); }
     if(!e.isBuilding && e.team===1 && game.ownUnits().length){ const am=document.createElement('button'); am.className='ab'; am.dataset.tip='Angriffsbewegung (X): hingehen und alles angreifen, was im Weg steht.'; am.innerHTML='<span class="ic">⚔️</span><span class="k">X · Angriff</span>'; am.onclick=()=>{ Input.attackMode=true; UI.hint('Angriffsbewegung: Ziel anklicken'); }; ab.appendChild(am); const st=document.createElement('button'); st.className='ab'; st.dataset.tip='Halt (H): stehen bleiben.'; st.innerHTML='<span class="ic">✋</span><span class="k">H · Halt</span>'; st.onclick=()=>game.ownUnits().forEach(u=>u.orderStop()); ab.appendChild(st); }
@@ -1240,7 +1296,7 @@ const Flow = {
     this.overlay(`<div class="menu-hero">${img(1)}<div><div class="eyebrow">Two Cages, One Sound · Das Strategiespiel</div><h1>Camden <em>Command</em></h1><p style="margin-top:10px">Zwei Käfige. Zwei Welten. Ein Sound. Und ein Bauamt, das Zettel verteilt. Echtzeitstrategie durch alle Kapitel: Grünkohl ernten, Proberäume bauen, Räume halten, die Stadt überleben.</p></div></div>
       <ul class="missions">${MISSIONS.map(m=>`<li><button ${m.index>prog?'disabled':''} data-m="${m.index}">${img(BRIEF_IMG[m.index],'thumb')}<span><span class="t">${m.index+1} · ${m.title}</span><br><span class="s">${m.chapter}</span></span><span class="st ${m.index<prog?'done':''}">${m.index<prog?'gespielt':m.index===prog?'offen':'gesperrt'}</span></button></li>`).join('')}</ul>
       <div class="row" style="margin-top:18px"><button class="btn ghost" id="m-help">Steuerung</button>${prog>0?'<button class="btn ghost" id="m-reset">Fortschritt löschen</button>':''}<a class="btn ghost" href="https://chefcat-2026.github.io/two-cages-one-sound/">Zum Buch</a></div>
-      <p class="footnote">Nach dem Roman von U. Rinner. Läuft im Browser, am besten mit Maus und Tastatur. Am Handy: Tippen wählt, langes Tippen oder Tippen auf freien Boden schickt los, Ziehen bewegt die Kamera, zwei Finger zoomen.</p>`);
+      <p class="footnote">Dargestellt in Tusche wie die Illustrationen im Buch. Der Schalter oben rechts wechselt zu Farbe. Nach dem Roman von U. Rinner. Läuft im Browser, am besten mit Maus und Tastatur. Am Handy: Tippen wählt, langes Tippen oder Tippen auf freien Boden schickt los, Ziehen bewegt die Kamera, zwei Finger zoomen.</p>`);
     document.querySelectorAll('.missions button').forEach(b=>b.onclick=()=>this.briefing(MISSIONS[+b.dataset.m]));
     document.querySelectorAll('.missions button').forEach(b=>b.onclick=()=>this.briefing(MISSIONS[+b.dataset.m]));
     $('m-help').onclick=()=>this.help(false); const r=$('m-reset'); if(r) r.onclick=()=>{ store.set('progress',0); store.set('abilities',{}); this.menu(); };
@@ -1267,7 +1323,7 @@ const Flow = {
     this.overlay(`<div class="eyebrow">Steuerung</div><h2>So geht das.</h2><div class="help">
       <div><span>Figur wählen</span><kbd>Linksklick</kbd></div><div><span>Mehrere wählen</span><kbd>Ziehen</kbd></div><div><span>Bewegen · Angreifen · Ernten</span><kbd>Rechtsklick</kbd></div><div><span>Zur Auswahl hinzufügen</span><kbd>Shift</kbd></div>
       <div><span>Gleiche Einheiten wählen</span><kbd>Doppelklick</kbd></div><div><span>Angriffsbewegung</span><kbd>X</kbd></div><div><span>Halt</span><kbd>H</kbd></div><div><span>John · Theo wählen</span><kbd>J</kbd> <kbd>T</kbd></div>
-      <div><span>Kamera bewegen</span><kbd>WASD</kbd> <kbd>Pfeile</kbd> <kbd>Mausrand</kbd> <kbd>Mitte ziehen</kbd></div><div><span>Kamera drehen</span><kbd>Q</kbd> <kbd>E</kbd></div><div><span>Zoom</span><kbd>Mausrad</kbd></div><div><span>Zur Basis</span><kbd>M</kbd></div><div><span>Zum letzten Alarm</span><kbd>Leertaste</kbd></div><div><span>Diese Hilfe</span><kbd>F1</kbd></div>
+      <div><span>Karte ziehen</span><kbd>Rechte Maustaste halten</kbd></div><div><span>Kamera bewegen</span><kbd>WASD</kbd> <kbd>Pfeile</kbd> <kbd>Mausrand</kbd></div><div><span>Kamera drehen</span><kbd>Q</kbd> <kbd>E</kbd></div><div><span>Zoom</span><kbd>Mausrad</kbd></div><div><span>Zur Basis</span><kbd>M</kbd></div><div><span>Zum letzten Alarm</span><kbd>Leertaste</kbd></div><div><span>Diese Hilfe</span><kbd>F1</kbd></div>
       <div><span>Gruppe speichern · rufen</span><kbd>Strg+1…5</kbd> <kbd>1…5</kbd></div><div><span>Gurren · Fucker Sucker</span><kbd>G</kbd> <kbd>F</kbd></div><div><span>Der schwere Riff · Der Blick</span><kbd>R</kbd> <kbd>B</kbd></div><div><span>Bau abbrechen · Auswahl leeren</span><kbd>Esc</kbd></div></div>
       <p style="margin-top:14px"><b>Warnungen:</b> Greift das Bauamt an oder rückt es näher, erscheint ein roter Pfeil am Bildrand, die Minimap pulsiert, ein Ton geht. Leertaste springt hin.</p>
       <p style="margin-top:14px"><b>Grünkohl</b> kommt von den Feldern, Mäuse tragen ihn zum Käfig oder zum Lager. <b>Ruf</b> entsteht auf der Bühne und mit jedem Zettel, der nicht klebt. Ruf bezahlt die Fähigkeiten der Helden.</p>
@@ -1279,7 +1335,7 @@ const Flow = {
 let lastT=performance.now();
 function loop(t){ requestAnimationFrame(loop); const real=Math.min(0.05,(t-lastT)/1000); lastT=t; if(!game) return;
   if(!Flow.paused && !game.over){ for(let i=0;i<game.speed;i++) game.update(real); } else if(game.over){ fx.update(real); game.units.forEach(u=>{ if(u.dead) u.update(real); else u.sync(real,false); }); }
-  Input.update(real); updateCamera(real); renderer.render(scene,camera); }
+  Input.update(real); updateCamera(real); Post.render(t/1000); }
 Input.init(); UI.init(); Flow.menu(); updateCamera(); requestAnimationFrame(loop);
 </script>
 </body>
