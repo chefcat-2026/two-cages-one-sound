@@ -394,7 +394,7 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.1); sun.castShadow = true;
 sun.shadow.mapSize.set(1024,1024); sun.shadow.camera.near=10; sun.shadow.camera.far=200; sun.shadow.bias=-0.0008;
 const sunTarget = new THREE.Object3D(); scene.add(sunTarget); sun.target = sunTarget; scene.add(sun);
 function updateCamera(dt=0){
-  if(dt){ const k=1-Math.exp(-dt*9); cam.x+=(cam.tx-cam.x)*k; cam.z+=(cam.tz-cam.z)*k; cam.dist+=(cam.tdist-cam.dist)*k; }
+  if(dt){ const k=1-Math.exp(-dt*16); cam.x+=(cam.tx-cam.x)*k; cam.z+=(cam.tz-cam.z)*k; cam.dist+=(cam.tdist-cam.dist)*(1-Math.exp(-dt*9)); }
   if(game&&game.dome){ game.dome.position.set(cam.x,0,cam.z); }
   const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   camera.position.set(cam.x + Math.sin(cam.yaw)*cp*cam.dist, sp*cam.dist, cam.z + Math.cos(cam.yaw)*cp*cam.dist);
@@ -1066,11 +1066,11 @@ const Input = {
     const c=canvas;
     c.addEventListener('contextmenu', e=>e.preventDefault());
     c.addEventListener('pointerdown', e=>{ Audio.init(); if(!game) return; this.mouse.down=true; this.mouse.btn=e.button; this.mouse.shift=e.shiftKey; this.mouse.sx=e.clientX; this.mouse.sy=e.clientY; this.mouse.drag=false; this.mouse.px=e.clientX; this.mouse.py=e.clientY; this.pointerType=e.pointerType; c.setPointerCapture(e.pointerId);
-      if(e.pointerType==='touch'){ this.touchT=performance.now(); } });
+      if(e.pointerType==='touch'){ this.touchT=performance.now(); } const gp=this.groundAt(e.clientX,e.clientY); this.grab=gp?{x:gp.x,z:gp.z}:null; });
     c.addEventListener('pointermove', e=>{ this.mouse.x=e.clientX; this.mouse.y=e.clientY; this.mouseMoved=true; if(!game) return;
       if(this.mouse.down){ const dx=e.clientX-this.mouse.sx, dy=e.clientY-this.mouse.sy; if(Math.abs(dx)+Math.abs(dy)>6) this.mouse.drag=true;
         if(this.mouse.btn===1 || this.mouse.btn===2 || (this.mouse.btn===0&&!this.mouse.shift&&!game.placing) || (this.pointerType==='touch'&&this.mouse.drag&&!game.placing)){ canvas.style.cursor='grabbing'; // Kamera ziehen
-          const mdx=e.clientX-this.mouse.px, mdy=e.clientY-this.mouse.py; this.pan(-mdx*0.06*cam.dist/42, -mdy*0.06*cam.dist/42); }
+          if(this.grab){ const gp=this.groundAt(e.clientX,e.clientY); if(gp){ cam.tx+=this.grab.x-gp.x; cam.tz+=this.grab.z-gp.z; this.clampCam(); cam.x=cam.tx; cam.z=cam.tz; updateCamera(0); } } else { const mdx=e.clientX-this.mouse.px, mdy=e.clientY-this.mouse.py; this.pan(-mdx*0.06*cam.dist/42, -mdy*0.06*cam.dist/42); } }
         else if(this.mouse.btn===0 && this.mouse.shift && this.mouse.drag && !game.placing){ UI.selbox(this.mouse.sx,this.mouse.sy,e.clientX,e.clientY); }
       }
       this.mouse.px=e.clientX; this.mouse.py=e.clientY; });
@@ -1087,7 +1087,7 @@ const Input = {
         else if(!e.shiftKey) game.select([]); }
     });
     c.addEventListener('pointerleave', ()=>{ this.mouse.x=-1; this.mouse.y=-1; this.edgeT=0; });
-    c.addEventListener('wheel', e=>{ e.preventDefault(); cam.tdist=clamp(cam.tdist+Math.sign(e.deltaY)*4, cam.minD, cam.maxD); }, {passive:false});
+    c.addEventListener('wheel', e=>{ e.preventDefault(); const before=this.groundAt(e.clientX,e.clientY); const nd=clamp(cam.tdist+Math.sign(e.deltaY)*4, cam.minD, cam.maxD); if(before && nd<cam.tdist){ const f=1-nd/cam.tdist; cam.tx+=(before.x-cam.tx)*f*0.6; cam.tz+=(before.z-cam.tz)*f*0.6; this.clampCam(); } cam.tdist=nd; }, {passive:false});
     // Pinch-Zoom
     let pinch=null; c.addEventListener('touchstart', e=>{ if(e.touches.length===2){ pinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); } }, {passive:true});
     c.addEventListener('touchmove', e=>{ if(e.touches.length===2&&pinch){ const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); cam.tdist=clamp(cam.tdist-(d-pinch)*0.08, cam.minD, cam.maxD); pinch=d; } }, {passive:true});
@@ -1120,6 +1120,7 @@ const Input = {
     if(dx||dz) this.pan(dx,dz);
     if(this.mouseMoved||game.placing){ this.mouseMoved=false; const hit=this.pick(this.mouse.x,this.mouse.y); UI.updateGhost(hit); UI.cursorFor(hit); }
   },
+  groundAt(sx,sy){ const rect=canvas.getBoundingClientRect(); const nd=new THREE.Vector2(((sx-rect.left)/rect.width)*2-1, -((sy-rect.top)/rect.height)*2+1); const rc=new THREE.Raycaster(); rc.setFromCamera(nd,camera); const p=new THREE.Vector3(); return rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),p)?p:null; },
   pick(sx,sy){ const rect=canvas.getBoundingClientRect(); const nd=new THREE.Vector2(((sx-rect.left)/rect.width)*2-1, -((sy-rect.top)/rect.height)*2+1); const rc=new THREE.Raycaster(); rc.setFromCamera(nd,camera); const pl=new THREE.Plane(new THREE.Vector3(0,1,0),0); const p=new THREE.Vector3(); if(!rc.ray.intersectPlane(pl,p)) return null;
     // Entität unter dem Cursor: nächste Einheit (Radius), dann Gebäude (Fußabdruck), dann Grünkohl
     let best=null, bd=0.8+cam.dist/60; for(const u of game.units){ if(u.dead) continue; const d=Math.sqrt(dist2(p.x,p.z,u.x,u.z))-u.r; if(d<bd){bd=d;best=u;} }
