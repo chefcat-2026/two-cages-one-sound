@@ -1,4 +1,4 @@
-# Figuren für Camden Command, gebaut in Blender (bpy, headless). Export: models.json + models.bin
+# Figuren für Camden Command, gebaut in Blender (bpy, headless). Export: img/models.json (Manifest + base64-Meshdaten)
 import bpy, bmesh, json, math, random, struct, sys
 from mathutils import Vector, noise
 OUT = sys.argv[sys.argv.index('--')+1] if '--' in sys.argv else '.'
@@ -230,8 +230,9 @@ def build_all():
     dz = man('dezernent', (0.08,0.08,0.1), hat=True, case=True); export(dz, 'dezernent', 1.25); bpy.data.objects.remove(dz)
     fn = man('fan', (0.07,0.07,0.08), shirt=(0.75,0.12,0.16), hair=(0.05,0.05,0.05), spikes=True); export(fn, 'fan'); bpy.data.objects.remove(fn)
     rd = man('roadie', (0.14,0.14,0.15), amp=True, hair=(0.2,0.15,0.1)); export(rd, 'roadie'); bpy.data.objects.remove(rd)
-    with open(OUT+'/models.bin','wb') as f: f.write(BIN)
-    with open(OUT+'/models.json','w') as f: json.dump(MANIFEST, f)
+    import base64
+    MANIFEST['_bin'] = base64.b64encode(bytes(BIN)).decode()
+    with open(OUT+'/models.json','w') as f: json.dump(MANIFEST, f)  # Meshdaten base64 in derselben Datei
     print('bytes', len(BIN))
 
 build_all()
