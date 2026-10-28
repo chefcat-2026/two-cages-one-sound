@@ -583,7 +583,18 @@ const Models = {
     return g;
   }
 };
+/* ---------- Figuren aus Blender (img/models.bin + models.json) ---------- */
+const Models3D = {
+  data:null, cache:{}, mat:new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.82, metalness:0.02}),
+  async load(){ try{ const base=(typeof IMG==='string'?IMG:'img/'); const [j,b]=await Promise.all([fetch(base+'models.json').then(r=>{ if(!r.ok) throw 0; return r.json(); }), fetch(base+'models.bin').then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })]); this.data={j,b}; }catch(e){ this.data=null; } },
+  geo(name){ if(!this.data||!this.data.j[name]) return null; if(this.cache[name]) return this.cache[name]; const m=this.data.j[name], b=this.data.b; const g=new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(b, m.pos[0], m.pos[1]),3)); g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(b, m.nor[0], m.nor[1]),3)); g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(b, m.col[0], m.col[1]),3));
+    g.setIndex(new THREE.BufferAttribute(m.u32? new Uint32Array(b, m.idx[0], m.idx[1]) : new Uint16Array(b, m.idx[0], m.idx[1]),1)); g.computeBoundingSphere(); this.cache[name]=g; return g; },
+  get(name){ const g=this.geo(name); if(!g) return null; const mesh=new THREE.Mesh(g, this.mat); mesh.castShadow=true; mesh.receiveShadow=false; const grp=new THREE.Group(); grp.add(mesh); return grp; }
+};
 function buildUnitModel(def){
+  const m3=Models3D.get(def.model3d||Object.keys(UNITS).find(k=>UNITS[k]===def));
+  if(m3){ if(def.harvester){ const leaf=mesh(GEO.sph, mat(0x3e7a2d), 0.22,0.14,0.22, 0,0.5,0.1,false); leaf.name='carry'; leaf.visible=false; m3.add(leaf); } return m3; }
   switch(def.model){
     case 'john': return Models.john(); case 'theo': return Models.theo(); case 'maus': return Models.maus();
     case 'cat': return Models.cat(def.fur); case 'man': return Models.man(def.suit, def.name==='Zettel-Bote'); case 'bagger': return Models.bagger();
@@ -1405,7 +1416,7 @@ let lastT=performance.now();
 function loop(t){ requestAnimationFrame(loop); const real=Math.min(0.05,(t-lastT)/1000); lastT=t; if(!game) return;
   if(!Flow.paused && !game.over){ for(let i=0;i<game.speed;i++) game.update(real); } else if(game.over){ fx.update(real); game.units.forEach(u=>{ if(u.dead) u.update(real); else u.sync(real,false); }); }
   Input.update(real); updateCamera(real); Post.render(t/1000); }
-Input.init(); UI.init(); Flow.menu(); updateCamera(); requestAnimationFrame(loop);
+Input.init(); UI.init(); Models3D.load().then(()=>Flow.menu()); updateCamera(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>
