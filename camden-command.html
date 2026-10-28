@@ -165,6 +165,13 @@
   #alertArrow .tri{width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:22px solid var(--blood-bright);filter:drop-shadow(0 0 6px rgba(230,57,74,.9));animation:pulse .7s infinite alternate}
   #alertArrow .lbl{margin-top:4px;background:rgba(10,10,10,.85);border:1px solid var(--blood);color:var(--paper);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;white-space:nowrap}
   @keyframes pulse{from{opacity:.55;transform:scale(.9)}to{opacity:1;transform:scale(1.1)}}
+  #dmgflash{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 120px 30px rgba(196,30,42,0);transition:box-shadow .25s}
+  #dmgflash.on{box-shadow:inset 0 0 140px 40px rgba(196,30,42,.55);transition:none}
+  #wave{margin-top:8px;font-size:.8rem;color:var(--paper-dim);display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums}
+  #wave b{color:var(--blood-bright)}
+  .stars{color:var(--ruf);font-size:.8em;letter-spacing:.05em}
+  .diff{display:inline-flex;border:1px solid var(--line)} .diff button{padding:8px 14px;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ash)} .diff button.active{background:var(--blood);color:#fff}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:14px} .stats div{background:var(--ink-2);border:1px solid var(--line);padding:10px 12px} .stats b{display:block;font-size:1.4rem;font-variant-numeric:tabular-nums;color:var(--paper)} .stats span{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ash)}
   #log div.alert{border-left-color:var(--blood-bright);color:#ffd9dc;background:rgba(80,10,14,.75)}
   #sel-portrait img,.bb img{width:100%;height:100%;object-fit:cover;display:block}
   .bb{display:grid;grid-template-columns:44px 1fr;grid-template-rows:auto auto auto;column-gap:8px;align-items:start}
@@ -197,7 +204,8 @@
   <canvas id="gl"></canvas>
   <div id="selbox"></div>
 
-    <div id="hud">
+    <div id="dmgflash"></div>
+  <div id="hud">
     <div id="alertArrow"><div class="tri"></div><div class="lbl">Angriff · Leertaste</div></div>
     <div id="topbar">
       <div class="brand">Camden Command</div>
@@ -215,6 +223,7 @@
       <h3>Ziele</h3>
       <ul id="objlist"></ul>
       <div class="timer" id="objtimer" hidden></div>
+      <div id="wave" hidden><span>Nächste Welle</span><b id="wave-t"></b></div>
     </div>
 
     <div id="dialog" class="hud-box"><div class="who" id="dlg-who"></div><div class="line" id="dlg-line"></div></div>
@@ -277,7 +286,8 @@ const Audio = {
       this.dist = sh; this.distGain = this.ctx.createGain(); this.distGain.gain.value=0.35; sh.connect(this.distGain); this.distGain.connect(this.master);
     } catch(e){ this.ctx=null; }
   },
-  toggle(){ this.init(); if(!this.ctx) return false; this.on=!this.on; if (this.ctx.state==='suspended') this.ctx.resume(); this.master.gain.setTargetAtTime(this.on?0.7:0, this.ctx.currentTime, 0.05); if(this.on) this.startRain(); else this.stopRain(); return this.on; },
+  toggle(){ this.init(); if(!this.ctx) return false; this.on=!this.on; store.set('sound',this.on); if (this.ctx.state==='suspended') this.ctx.resume(); this.master.gain.setTargetAtTime(this.on?0.7:0, this.ctx.currentTime, 0.05); if(this.on){ this.startRain(); this.musicStart(); } else { this.stopRain(); this.musicStop(); } return this.on; },
+  ensure(){ if(this.on) return; if(store.get('sound',true)) { this.toggle(); const b=$('b-sound'); if(b){ b.textContent='Ton an'; b.classList.add('active'); } } },
   env(g, t, a, d, peak=1){ g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+a); g.gain.exponentialRampToValueAtTime(0.0001,t+a+d); },
   chord(freqs, dur=0.5, vol=0.5){ // Johns Riff: schwere Powerchords, verzerrt
     if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; const g=this.ctx.createGain(); this.env(g,t,0.01,dur,vol); g.connect(this.dist);
@@ -295,6 +305,25 @@ const Audio = {
   paper(){ if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; const o=this.ctx.createOscillator(); o.type='square'; o.frequency.setValueAtTime(900,t); o.frequency.exponentialRampToValueAtTime(300,t+0.12); const g=this.ctx.createGain(); this.env(g,t,0.005,0.12,0.12); o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.2); },
   alarm(){ if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; [0,0.22].forEach((o,i)=>{ const osc=this.ctx.createOscillator(); osc.type='square'; osc.frequency.value=i?330:440; const lp=this.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1200; const g=this.ctx.createGain(); this.env(g,t+o,0.01,0.18,0.14); osc.connect(lp); lp.connect(g); g.connect(this.master); osc.start(t+o); osc.stop(t+o+0.3); }); },
   squeak(){ if(!this.on||!this.ctx) return; const t=this.ctx.currentTime; const o=this.ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(1800,t); o.frequency.exponentialRampToValueAtTime(2600,t+0.15); const g=this.ctx.createGain(); this.env(g,t,0.01,0.2,0.18); o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.3); },
+  kick(t,v=0.9){ const o=this.ctx.createOscillator(); o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(42,t+0.12); const g=this.ctx.createGain(); this.env(g,t,0.003,0.22,v); o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.3); },
+  snare(t,v=0.5){ const len=0.18; const buf=this.ctx.createBuffer(1,this.ctx.sampleRate*len,this.ctx.sampleRate); const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.5); const sn=this.ctx.createBufferSource(); sn.buffer=buf; const bp=this.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1800; const g=this.ctx.createGain(); g.gain.value=v; sn.connect(bp); bp.connect(g); g.connect(this.master); sn.start(t); const o=this.ctx.createOscillator(); o.frequency.setValueAtTime(190,t); const g2=this.ctx.createGain(); this.env(g2,t,0.002,0.08,v*0.6); o.connect(g2); g2.connect(this.master); o.start(t); o.stop(t+0.1); },
+  hatAt(t,v=0.18,open=false){ const len=open?0.25:0.05; const buf=this.ctx.createBuffer(1,this.ctx.sampleRate*len,this.ctx.sampleRate); const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length); const sn=this.ctx.createBufferSource(); sn.buffer=buf; const hp=this.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=6000; const g=this.ctx.createGain(); g.gain.value=v; sn.connect(hp); hp.connect(g); g.connect(this.master); sn.start(t); },
+  bass(t,f,dur=0.2,v=0.35){ const o=this.ctx.createOscillator(); o.type='sawtooth'; o.frequency.value=f; const lp=this.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(900,t); lp.frequency.exponentialRampToValueAtTime(200,t+dur); const g=this.ctx.createGain(); this.env(g,t,0.005,dur,v); o.connect(lp); lp.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+0.1); },
+  gtr(t,f,dur=0.16,v=0.4,mute=true){ const g=this.ctx.createGain(); this.env(g,t,0.004,mute?dur*0.7:dur*1.6,v); g.connect(this.dist); const lp=this.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=mute?900:1800; lp.connect(g); [f,f*1.5].forEach(ff=>{ [0,-4,5].forEach(dt=>{ const o=this.ctx.createOscillator(); o.type='sawtooth'; o.frequency.value=ff; o.detune.value=dt*2; o.connect(lp); o.start(t); o.stop(t+dur*2); }); }); },
+  // Musik: zwei Riffs, Intensität 0 (Stille/Drone), 1 (Bass & Hi-Hat), 2 (volles Riff mit Schlagzeug)
+  music:{ step:0, next:0, intensity:0, target:0, timer:null, bar:0 },
+  RIFFS:[ {bpm:104, E:41.2, G:49, A:55, gt:[1,1,0,1, 3,0,1,0, 1,1,0,1, 4,0,3,0], ac:[1,0,0,1, 1,0,0,0, 1,0,0,1, 1,0,1,0]}, {bpm:152, E:41.2, G:49, A:55, gt:[1,1,1,1, 3,3,1,1, 1,1,1,1, 4,4,3,3], ac:[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0]} ],
+  musicStart(){ if(this.music.timer||!this.ctx) return; this.music.next=this.ctx.currentTime+0.1; this.music.timer=setInterval(()=>this.musicTick(),90); },
+  musicStop(){ if(this.music.timer){ clearInterval(this.music.timer); this.music.timer=null; } },
+  setIntensity(v){ this.music.target=v; },
+  musicTick(){ if(!this.on||!this.ctx) return; const m=this.music; const riff=this.RIFFS[m.target>=2?1:0]; const sec=60/riff.bpm/2; // Achtel
+    while(m.next<this.ctx.currentTime+0.25){ const t=m.next; const i=m.step%16; if(i===0){ m.bar++; m.intensity=m.target; }
+      const inten=m.intensity; const note=riff.gt[i]; const f= note===3?riff.G: note===4?riff.A: riff.E;
+      if(inten>=1){ if(i%2===0) this.hatAt(t,0.1); if(i%4===0||riff.ac[i]) this.bass(t,f,sec*0.9,0.3); if(i%8===0) this.kick(t,0.6); }
+      if(inten>=2){ if(note) this.gtr(t,f*2,sec,riff.ac[i]?0.5:0.3, !riff.ac[i]); if(i===4||i===12) this.snare(t,0.5); if(i%4===0) this.kick(t,0.9); if(i%2===1) this.hatAt(t,0.14); if(i===14&&m.bar%4===0) this.hatAt(t,0.2,true); }
+      if(inten===0 && i===0 && m.bar%2===0){ this.bass(t,riff.E/2,1.6,0.12); }
+      m.next+=sec; m.step++; }
+  },
   startRain(){ if(!this.ctx||this.rain||!game||!game.mission||!game.mission.rain) return; const len=2; const buf=this.ctx.createBuffer(1,this.ctx.sampleRate*len,this.ctx.sampleRate); const d=buf.getChannelData(0); let b0=0,b1=0; for(let i=0;i<d.length;i++){ const w=Math.random()*2-1; b0=0.99*b0+w*0.1; b1=0.96*b1+w*0.05; d[i]=(b0+b1)*0.6; } const s=this.ctx.createBufferSource(); s.buffer=buf; s.loop=true; const lp=this.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900; const g=this.ctx.createGain(); g.gain.value=0.12; s.connect(lp); lp.connect(g); g.connect(this.master); s.start(); this.rain={s,g}; },
   stopRain(){ if(this.rain){ try{this.rain.s.stop();}catch(e){} this.rain=null; } }
 };
@@ -304,28 +333,30 @@ const Audio = {
 const UNITS = {
   john:    {name:'John', ic:'🎸', hp:420, speed:3.4, dmg:34, range:5.5, cd:1.6, aoe:2.4, r:0.55, hero:true, acquire:9, desc:'Langsam. Schwer. Jeder Ton wie ein Stein, der ins Wasser fällt.', model:'john', sfx:'chord'},
   theo:    {name:'Theo', ic:'🖤', hp:300, speed:6.4, dmg:13, range:3.6, cd:0.42, r:0.55, hero:true, acquire:9, desc:'Zu viel Energie für jeden Raum. Gurren beruhigt alle in der Nähe.', model:'theo', sfx:'hat', aura:{radius:7.5, speed:1.2, dmg:1.15}},
-  maus:    {name:'Maus', ic:'🐭', hp:40, speed:6.2, dmg:3, range:1.1, cd:0.8, r:0.3, cost:30, time:5, harvester:true, carry:12, acquire:0, desc:'Will das Futter. Kommt trotzdem wegen der Musik. Erntet Grünkohl.', model:'maus', sfx:'squeak'},
-  fan:     {name:'Fan', ic:'🤘', hp:95, speed:4.6, dmg:9, range:1.7, cd:0.9, r:0.42, cost:60, time:8, acquire:7, desc:'Leder, Spikes, ausgeblichenes Band-Shirt. Nahkampf.', model:'fan', sfx:'hat'},
-  roadie:  {name:'Roadie', ic:'🔊', hp:170, speed:3.6, dmg:17, range:7.5, cd:1.4, r:0.5, cost:120, time:13, acquire:9, req:'buehne', desc:'Trägt den Verstärker. Fernkampf. Schleppt alles, fragt nichts.', model:'roadie', sfx:'chord', proj:0xe6394a},
+  maus:    {name:'Maus', ic:'🐭', hp:40, speed:6.6, dmg:3, range:1.1, cd:0.8, r:0.3, cost:25, time:4, harvester:true, carry:16, acquire:0, desc:'Will das Futter. Kommt trotzdem wegen der Musik. Erntet Grünkohl.', model:'maus', sfx:'squeak'},
+  fan:     {name:'Fan', ic:'🤘', hp:95, speed:5.0, dmg:10, range:1.7, cd:0.8, r:0.42, cost:50, time:6, acquire:7, desc:'Leder, Spikes, ausgeblichenes Band-Shirt. Nahkampf.', model:'fan', sfx:'hat'},
+  roadie:  {name:'Roadie', ic:'🔊', hp:170, speed:4.0, dmg:18, range:7.5, cd:1.3, r:0.5, cost:100, time:9, acquire:9, req:'buehne', desc:'Trägt den Verstärker. Fernkampf. Schleppt alles, fragt nichts.', model:'roadie', sfx:'chord', proj:0xe6394a},
   smokey:  {name:'Smokey', ic:'🐈', hp:650, speed:4.4, dmg:42, range:2.2, cd:1.25, r:0.75, hero:true, acquire:9, desc:'Britisch Kurzhaar. Ein Blick, der sagt: registriert, für unwichtig befunden.', model:'cat', fur:0x6f7078, sfx:'thud'},
   bounty:  {name:'Bounty', ic:'🐈‍⬛', hp:480, speed:6.2, dmg:30, range:2.2, cd:0.75, r:0.7, hero:true, acquire:9, desc:'Der Theo unter den Katern. Jünger, neugieriger, schneller.', model:'cat', fur:0x8a8b93, sfx:'thud'},
   adriana: {name:'Adriana', ic:'🎵', hp:220, speed:5, dmg:6, range:5, cd:1, r:0.5, hero:true, acquire:6, heal:14, desc:'Steht zwei Reihen weiter, mit der Selbstverständlichkeit von jemandem, der hier nicht zum ersten Mal ist. Heilt.', model:'pig', fur:0xb98a5a, fur2:0xf2ede4, sfx:'hat'},
   susanna: {name:'Susanna', ic:'🎶', hp:220, speed:5, dmg:6, range:5, cd:1, r:0.5, hero:true, acquire:6, heal:14, desc:'Lacht kurz, echt, nicht höflich. Heilt.', model:'pig', fur:0x4a3426, fur2:0xd9c4a6, sfx:'hat'},
   // Gegner
-  bote:    {name:'Zettel-Bote', ic:'📄', hp:70, speed:5.2, dmg:7, range:1.5, cd:1.0, r:0.42, acquire:9, team:2, bld:1.8, desc:'Licensing issues. Premises to be vacated by end of month.', model:'man', suit:0xcfc7b4, sfx:'paper'},
-  makler:  {name:'Makler', ic:'💼', hp:115, speed:4.2, dmg:12, range:7, cd:1.5, r:0.45, acquire:10, team:2, desc:'Erzählt von Potenzial. Meint Quadratmeterpreise.', model:'man', suit:0x2b3a4a, sfx:'paper', proj:0x9fd8ee},
-  inspektor:{name:'Inspektor', ic:'📋', hp:160, speed:4.0, dmg:11, range:5, cd:1.2, r:0.45, acquire:9, team:2, bld:1.5, desc:'Hygieneproblem, sagt er. Headquarter, sagt Theo.', model:'man', suit:0x5a6a4a, sfx:'paper', proj:0xdddddd},
-  bagger:  {name:'Bagger', ic:'🚜', hp:560, speed:2.5, dmg:48, range:2.4, cd:2.0, r:0.95, acquire:9, team:2, bld:1.8, desc:'Eigentumswohnungen, gebaut auf den Ruinen von Kellerbars.', model:'bagger', sfx:'thud'}
+  bote:    {name:'Zettel-Bote', ic:'📄', hp:70, speed:5.4, dmg:6, range:1.5, cd:1.0, r:0.42, acquire:9, team:2, bld:1.5, zettel:true, preferB:true, desc:'Licensing issues. Premises to be vacated by end of month.', model:'man', suit:0xcfc7b4, sfx:'paper'},
+  makler:  {name:'Makler', ic:'💼', hp:115, speed:4.4, dmg:12, range:7, cd:1.5, r:0.45, acquire:11, team:2, prefer:'maus', desc:'Erzählt von Potenzial. Meint Quadratmeterpreise.', model:'man', suit:0x2b3a4a, sfx:'paper', proj:0x9fd8ee},
+  inspektor:{name:'Inspektor', ic:'📋', hp:160, speed:4.0, dmg:11, range:5, cd:1.2, r:0.45, acquire:9, team:2, bld:1.5, zettel:true, preferB:true, desc:'Hygieneproblem, sagt er. Headquarter, sagt Theo.', model:'man', suit:0x5a6a4a, sfx:'paper', proj:0xdddddd},
+  nachbar: {name:'Nachbar', ic:'🥿', hp:48, speed:3.8, dmg:5, range:1.4, cd:1.1, r:0.42, acquire:8, team:2, bld:1.4, zettel:true, preferB:true, desc:'Lärmbeschwerde. Im Bademantel. Um halb elf.', model:'man', suit:0x7a4a6a, sfx:'paper'},
+  dezernent:{name:'Baudezernent', ic:'🎩', hp:900, speed:3.2, dmg:22, range:2.2, cd:1.4, r:0.7, acquire:10, team:2, bld:2.0, boss:true, desc:'Unterschreibt alles. Fragt nichts. Bringt Boten mit.', model:'man', suit:0x1a1a22, sfx:'thud'},
+  bagger:  {name:'Bagger', ic:'🚜', hp:560, speed:2.5, dmg:48, range:2.4, cd:2.0, r:0.95, acquire:9, team:2, bld:1.8, preferB:true, desc:'Eigentumswohnungen, gebaut auf den Ruinen von Kellerbars.', model:'bagger', sfx:'thud'}
 };
 
 /* ---------- Spieldaten: Gebäude ---------- */
 const BUILDINGS = {
   kaefig:   {name:'Käfig', ic:'🏠', hp:1600, size:3, cost:0, time:0, hq:true, dropoff:true, desc:'Heu. Stroh. Immer gleich. Hauptquartier und Grünkohl-Abgabe.'},
-  proberaum:{name:'Proberaum', ic:'🥁', hp:850, size:3, cost:150, time:18, trains:true, desc:'Es gab nie offizielle Bandproben. Hier entstehen Mäuse, Fans und Roadies.'},
-  buehne:   {name:'Bühne', ic:'🎤', hp:650, size:3, cost:200, time:22, ruf:1, desc:'Keine Palette, dreißig Zentimeter über dem Boden. Erzeugt Ruf.'},
-  heuturm:  {name:'Heuturm', ic:'🌾', hp:380, size:1, cost:90, time:9, turret:{dmg:12, range:8, cd:1.0, proj:0xe0b23a}, desc:'Theos Architektur. Türme ohne erkennbaren Zweck. Jetzt mit Zweck.'},
-  ampwall:  {name:'Verstärkerwand', ic:'🔈', hp:600, size:2, cost:180, time:15, req:'buehne', turret:{dmg:32, range:11, cd:2.2, proj:0xe6394a, aoe:1.6}, desc:'Lautsprecher, die zu laut betrieben werden. Fernverteidigung.'},
-  lager:    {name:'Grünkohl-Lager', ic:'🥬', hp:500, size:2, cost:120, time:11, dropoff:true, bonus:1.25, desc:'Wir brauchen mehr. Wir haben genug. Beim Grünkohl stimmt das nie. Abgabe mit Bonus.'},
+  proberaum:{name:'Proberaum', ic:'🥁', hp:850, size:3, cost:150, time:12, trains:true, desc:'Es gab nie offizielle Bandproben. Hier entstehen Mäuse, Fans und Roadies.'},
+  buehne:   {name:'Bühne', ic:'🎤', hp:650, size:3, cost:180, time:15, ruf:2, desc:'Keine Palette, dreißig Zentimeter über dem Boden. Erzeugt Ruf.'},
+  heuturm:  {name:'Heuturm', ic:'🌾', hp:380, size:1, cost:80, time:7, turret:{dmg:14, range:8.5, cd:0.9, proj:0xe0b23a}, desc:'Theos Architektur. Türme ohne erkennbaren Zweck. Jetzt mit Zweck.'},
+  ampwall:  {name:'Verstärkerwand', ic:'🔈', hp:600, size:2, cost:170, time:12, req:'buehne', turret:{dmg:32, range:11, cd:2.2, proj:0xe6394a, aoe:1.6}, desc:'Lautsprecher, die zu laut betrieben werden. Fernverteidigung.'},
+  lager:    {name:'Grünkohl-Lager', ic:'🥬', hp:500, size:2, cost:110, time:9, dropoff:true, bonus:1.25, desc:'Wir brauchen mehr. Wir haben genug. Beim Grünkohl stimmt das nie. Abgabe mit Bonus.'},
   // Gegner / Spezial
   buero:    {name:'Immobilien-Büro', ic:'🏢', hp:2600, size:4, team:2, spawn:['bote','makler'], spawnEvery:40, desc:'Mieten steigen. Venues schließen. Nicht durch Skandale. Durch Zettel.'},
   condo:    {name:'Eigentumswohnung', ic:'🏗️', hp:1250, size:3, team:2, spawn:['bote'], spawnEvery:40, desc:'Gebaut, weil der Boden plötzlich mehr wert war als alles, was je darauf passiert ist.'},
@@ -342,10 +373,10 @@ const PLAYER_TRAIN = ['maus','fan','roadie'];
 
 /* ---------- Fähigkeiten der Helden ---------- */
 const ABILITIES = {
-  gurren:  {name:'Gurren', ic:'〰️', key:'G', ruf:25, cd:30, owner:'theo', tip:'Gurren (G): Heilt und beschleunigt alle in der Nähe. 25 Ruf.'},
-  fsucker: {name:'Fucker Sucker', ic:'🔥', key:'F', ruf:50, cd:40, owner:'theo', req:'fsucker', tip:'Fucker Sucker (F): Brennt sofort. 70 Schaden im Umkreis. Kein Mittelteil. 50 Ruf.'},
-  riff:    {name:'Der schwere Riff', ic:'🪨', key:'R', ruf:40, cd:35, owner:'john', tip:'Der schwere Riff (R): Jeder Ton ein Stein. 45 Schaden und 3 s Stillstand im Umkreis. 40 Ruf.'},
-  blick:   {name:'Der Blick', ic:'👁️', key:'B', ruf:30, cd:30, owner:'smokey', tip:'Der Blick (B): Registriert und für unwichtig befunden. Gegner im Umkreis fliehen 4 s. 30 Ruf.'}
+  gurren:  {name:'Gurren', ic:'〰️', key:'G', ruf:20, cd:20, owner:'theo', tip:'Gurren (G): Heilt und beschleunigt alle in der Nähe. 25 Ruf.'},
+  fsucker: {name:'Fucker Sucker', ic:'🔥', key:'F', ruf:40, cd:30, owner:'theo', req:'fsucker', tip:'Fucker Sucker (F): Brennt sofort. 70 Schaden im Umkreis. Kein Mittelteil. 50 Ruf.'},
+  riff:    {name:'Der schwere Riff', ic:'🪨', key:'R', ruf:30, cd:25, owner:'john', tip:'Der schwere Riff (R): Jeder Ton ein Stein. 45 Schaden und 3 s Stillstand im Umkreis. 40 Ruf.'},
+  blick:   {name:'Der Blick', ic:'👁️', key:'B', ruf:25, cd:25, owner:'smokey', tip:'Der Blick (B): Registriert und für unwichtig befunden. Gegner im Umkreis fliehen 4 s. 30 Ruf.'}
 };
 
 /* ---------- Three.js: Szene, Kamera, Licht ---------- */
@@ -367,6 +398,7 @@ function updateCamera(dt=0){
   if(game&&game.dome){ game.dome.position.set(cam.x,0,cam.z); }
   const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   camera.position.set(cam.x + Math.sin(cam.yaw)*cp*cam.dist, sp*cam.dist, cam.z + Math.cos(cam.yaw)*cp*cam.dist);
+  if(cam.shake>0){ cam.shake=Math.max(0,cam.shake-dt*2.2); const a=cam.shake*0.35; camera.position.x+=(Math.random()-0.5)*a; camera.position.y+=(Math.random()-0.5)*a; camera.position.z+=(Math.random()-0.5)*a; }
   camera.lookAt(cam.x, 0, cam.z);
   sun.position.set(cam.x+30, 60, cam.z+20); sunTarget.position.set(cam.x, 0, cam.z);
   const s = 46 + cam.dist*0.5; sun.shadow.camera.left=-s; sun.shadow.camera.right=s; sun.shadow.camera.top=s; sun.shadow.camera.bottom=-s; sun.shadow.camera.updateProjectionMatrix();
@@ -731,6 +763,8 @@ class Unit extends Entity {
     super(); this.type=type; this.def=UNITS[type]; this.team=team; this.x=x; this.z=z; this.maxHp=this.def.hp; this.hp=this.maxHp;
     this.r=this.def.r; this.speed=this.def.speed; this.path=null; this.target=null; this.attackTarget=null; this.cd=0; this.scanT=rnd(0.3); this.state='idle'; this.stun=0; this.flee=0;
     this.carry=0; this.kale=null; this.gatherT=0; this.attackMove=false; this.deathT=0; this.buff=0; this.facing=rnd(Math.PI*2); this.bob=rnd(10); this.cooldowns={};
+    this.level=0; this.xp=0; if(this.def.hero && team===1){ const vet=store.get('vet',{}); this.level=vet[type]||0; this.maxHp=Math.round(this.def.hp*(1+0.1*this.level)); this.hp=this.maxHp; }
+    const dm=game&&game.mission.enemyHpMul; if(team===2&&dm){ this.maxHp=Math.round(this.maxHp*dm); this.hp=this.maxHp; }
     this.mesh=buildUnitModel(this.def); this.mesh.position.set(x,0,z); scene.add(this.mesh);
     this.ring=new THREE.Mesh(GEO.ring, new THREE.MeshBasicMaterial({color: team===1?0xe6394a:team===2?0x3aa0c8:0x8a8580, side:THREE.DoubleSide, transparent:true, opacity:0.9})); this.ring.rotation.x=-Math.PI/2; this.ring.position.y=0.04; this.ring.scale.setScalar(this.r*1.9); this.ring.visible=false; this.mesh.add(this.ring);
     this.hpBar=makeHpBar(this.r*2.2, (this.def.hero?1.5:1.0)+this.r*0.8); this.mesh.add(this.hpBar.g);
@@ -743,7 +777,7 @@ class Unit extends Entity {
   smoothPath(){ // Sichtlinien-Glättung: so wenige Wegpunkte wie möglich, keine Zickzack-Zellen
     if(!this.path||this.path.length<2) return; const w=game.world; const out=[]; let cur=[this.x,this.z]; let i=0; while(i<this.path.length){ let j=this.path.length-1; while(j>i && !w.lineFree(cur[0],cur[1],this.path[j][0],this.path[j][1], Math.min(0.6,this.r+0.1))) j--; out.push(this.path[j]); cur=this.path[j]; i=j+1; } this.path=out; }
   distTo(e){ if(e.isBuilding){ const hx=e.size*CELL/2, hz=hx; const px=clamp(this.x,e.x-hx,e.x+hx), pz=clamp(this.z,e.z-hz,e.z+hz); return Math.sqrt(dist2(this.x,this.z,px,pz)); } return Math.sqrt(dist2(this.x,this.z,e.x,e.z)) - e.r; }
-  damage(d, from){ if(this.dead) return; this.hp-=d; if(from&&from.team===2&&this.team===1&&(this.def.hero||this.state!=='attack')) game.alert(this.x,this.z, this.def.hero?`${this.def.name} wird angegriffen!`:`${this.def.name} unter Beschuss!`); if(this.hp<=0){ this.die(from); } }
+  damage(d, from){ if(this.dead) return; this.hp-=d; if(this.team===1&&this.def.hero) UI.flash(); if(from&&from.team===2&&this.team===1&&(this.def.hero||this.state!=='attack')) game.alert(this.x,this.z, this.def.hero?`${this.def.name} wird angegriffen!`:`${this.def.name} unter Beschuss!`); if(this.hp<=0){ this.die(from); } }
   die(from){ this.dead=true; this.deathT=0.8; game.onDeath(this, from); }
   update(dt){
     if(this.dead){ this.deathT-=dt; this.mesh.scale.setScalar(Math.max(0.01,this.deathT/0.8)); this.mesh.position.y -= dt*0.6; if(this.deathT<=0) this.remove(); return; }
@@ -760,7 +794,7 @@ class Unit extends Entity {
     this.scanT-=dt;
     if(this.scanT<=0){ this.scanT=0.3;
       if((this.state==='idle'||this.attackMove||(this.state==='attack'&&(!this.attackTarget||this.attackTarget.dead))) && def.acquire>0){
-        const e=game.nearestEnemy(this, def.acquire); if(e){ this.attackTarget=e; if(this.state==='idle') this.state='attack'; else if(this.attackMove) this.state='attack'; }
+        let e=null; if(def.prefer){ e=game.nearestEnemyOfType(this, def.prefer, def.acquire*1.4); } if(!e && def.preferB){ e=game.nearestEnemyBuilding(this, def.acquire*1.3); } if(!e) e=game.nearestEnemy(this, def.acquire); if(e){ this.attackTarget=e; if(this.state==='idle') this.state='attack'; else if(this.attackMove) this.state='attack'; }
         else if(this.state==='attack' && this.attackMove){ this.state='move'; }
       }
       if(this.state==='attack' && this.attackTarget && this.attackTarget.dead){ this.attackTarget=null; if(this.attackMove){ this.state='move'; } else this.state='idle'; }
@@ -780,19 +814,22 @@ class Unit extends Entity {
     this.sync(dt, this.state!=='idle');
   }
   attack(t, mul){
-    const def=this.def; const dmg=def.dmg*mul*(t.isBuilding&&def.bld?def.bld:1);
+    const def=this.def; const dmg=def.dmg*mul*(t.isBuilding&&def.bld?def.bld:1)*(1+0.1*(this.level||0));
+    if(def.zettel && t.isBuilding && !t.zettel && t.team===1 && t.progress>=1){ t.stick(this); }
+    if(def.boss && Math.random()<0.25){ const u=game.spawnUnit('bote',2,this.x,this.z); u.orderMove(t.x,t.z,true); }
     if(def.range>3 && def.proj!==undefined){ game.projectile(this.x,this.z,1.1, t, dmg, def.proj, def.aoe||0, this); }
     else if(def.aoe){ fx.wave(t.x,t.z,def.aoe, 0xe6394a); game.areaDamage(t.x,t.z,def.aoe,dmg,this.team,this); }
     else t.damage(dmg, this);
     const s=def.sfx; if(s==='chord') Audio.chord(this.type==='john'?[82.4,123.5]:[110,164.8],0.35,this.type==='john'?0.5:0.25); else if(s==='hat') Audio.hat(0.15); else if(s==='paper') Audio.paper(); else if(s==='thud') Audio.thud(); else if(s==='squeak') Audio.squeak();
-    if(!t.isBuilding && !def.aoe) fx.hit(t.x,t.z, this.team===1?0xe6394a:0x9fd8ee);
+    if(!t.isBuilding && !def.aoe){ fx.hit(t.x,t.z, this.team===1?0xe6394a:0x9fd8ee); fx.pop(t); if(this.def.hero) fx.num(t.x,t.z,Math.round(dmg)); }
   }
+  gainXp(n){ if(!this.def.hero||this.team!==1) return; this.xp+=n; const need=[3,8,14,22,32][Math.min(this.level,4)]; if(this.level<5 && this.xp>=need){ this.xp-=need; this.level++; this.maxHp=Math.round(this.def.hp*(1+0.1*this.level)); this.hp=Math.min(this.maxHp,this.hp+this.maxHp*0.3); fx.text(this.x,this.z,'★ Stufe '+this.level,'#e0b23a'); game.log(`${this.def.name} ist jetzt Stufe ${this.level}.`); game.stats.levels++; UI.selectionChanged(); } }
   harvest(dt, spd){
     const k=this.kale;
     if(!k||k.amount<=0){ this.kale=game.nearestKale(this.x,this.z); if(!this.kale){ if(this.carry>0) this.state='return'; else this.state='idle'; return; } return; }
     const d=Math.sqrt(dist2(this.x,this.z,k.x,k.z));
     if(d>1.6){ if(!this.path){ this.dest={x:k.x,z:k.z}; this.replan(); } if(this.followPath(spd,dt)) this.path=null; return; }
-    this.face(k.x,k.z); this.gatherT+=dt; if(this.gatherT>0.5){ this.gatherT=0; const take=Math.min(3,k.amount,this.def.carry-this.carry); k.take(take); this.carry+=take; if(this.carry>=this.def.carry||k.amount<=0){ this.state='return'; this.path=null; } }
+    this.face(k.x,k.z); this.gatherT+=dt; if(this.gatherT>0.4){ this.gatherT=0; const take=Math.min(4,k.amount,this.def.carry-this.carry); k.take(take); this.carry+=take; if(this.carry>=this.def.carry||k.amount<=0){ this.state='return'; this.path=null; } }
   }
   returnKale(dt,spd){
     const d=game.nearestDropoff(this.x,this.z); if(!d){ this.state='idle'; return; }
@@ -816,7 +853,7 @@ class Unit extends Entity {
   face(tx,tz){ this.facing=Math.atan2(tx-this.x, tz-this.z); }
   sync(dt, moving){
     const m=this.mesh; m.position.x=this.x; m.position.z=this.z; let a=this.facing-m.rotation.y; a=Math.atan2(Math.sin(a),Math.cos(a)); m.rotation.y+=a*Math.min(1,dt*10);
-    this.bob+=dt*(moving?14:3); m.position.y = moving? Math.abs(Math.sin(this.bob))*0.08 : 0; if(this.stun>0) m.rotation.z=Math.sin(this.bob*2)*0.1; else m.rotation.z=0;
+    this.bob+=dt*(moving?14:3); m.position.y = moving? Math.abs(Math.sin(this.bob))*0.08 : 0; if(this.popT>0){ this.popT-=dt; const k=1+Math.max(0,this.popT)*1.4; m.scale.set(k,1/k,k); } else if(!this.dead) m.scale.set(1,1,1); if(this.stun>0) m.rotation.z=Math.sin(this.bob*2)*0.1; else m.rotation.z=0;
     const c=m.getObjectByName('carry'); if(c) c.visible=this.carry>0;
     this.hpBar.set(this.hp/this.maxHp, this.team); this.hpBar.g.visible = this.selected || this.hp<this.maxHp;
     this.ring.visible=!!this.selected; if(this.buff>0){ this.ring.visible=true; this.ring.material.opacity=0.5+0.4*Math.sin(this.bob*3); } else this.ring.material.opacity=0.9;
@@ -834,12 +871,17 @@ class Building extends Entity {
   }
   footprint(){ const r=Math.floor(this.size/2); const cells=[]; const sx=this.size%2?this.cx-r:this.cx-r+1, sz=this.size%2?this.cz-r:this.cz-r+1; for(let dx=0;dx<this.size;dx++) for(let dz=0;dz<this.size;dz++) cells.push([sx+dx, sz+dz]); return cells; }
   occupy(on){ const w=game.world; this.footprint().forEach(([cx,cz])=>{ if(w.inb(cx,cz)){ w.blocked[w.idx(cx,cz)]=on?1:0; w.bld[w.idx(cx,cz)]=on?this:null; } }); }
-  damage(d, from){ if(this.dead) return; this.hp-=d; if(from&&!from.dead){ game.defend(this, from); if(this.team===1&&from.team===2&&this.type!=='wald') game.alert(this.x,this.z,`${this.def.name} wird angegriffen!`); } if(this.hp<=0) this.die(from); }
+  damage(d, from){ if(this.dead) return; this.hp-=d; if(from&&!from.dead){ game.defend(this, from); if(this.team===1&&from.team===2&&this.type!=='wald'){ game.alert(this.x,this.z,`${this.def.name} wird angegriffen!`); UI.flash(); } } if(this.hp<=0) this.die(from); }
+  stick(from){ // Ein Zettel klebt: Gebäude steht still, bis eine eigene Einheit ihn abreißt
+    this.zettel=true; this.zettelT=0; if(!this.zettelMesh){ const m=mesh(GEO.plane, makeSign('LICENSING ISSUES', 256,128, '#0a0a0a', '#f2ede4', "bold 26px 'Archivo Narrow', Arial Narrow, Arial"), 1.6,0.8,1, 0, Math.max(1.6,this.size*0.9), this.r*0.98+0.05, false); m.material.toneMapped=false; this.zettelMesh=m; this.mesh.add(m); }
+    this.zettelMesh.visible=true; Audio.paper(); game.alert(this.x,this.z,`Zettel an ${this.def.name}! Einheit hinschicken.`,'zettel'); game.stats.zettelOn++; }
+  unstick(){ this.zettel=false; if(this.zettelMesh) this.zettelMesh.visible=false; game.addRuf(6); game.stats.zettelOff++; fx.text(this.x,this.z,'Zettel ab!','#f2ede4'); game.log(`${this.def.name}: Zettel abgerissen. +6 Ruf.`); Audio.squeak(); }
   die(from){ this.dead=true; this.deathT=1.0; this.occupy(false); game.onDeath(this, from); fx.wave(this.x,this.z,this.r*1.5,0xe0b23a); }
   update(dt){
     if(this.dead){ this.deathT-=dt; this.mesh.scale.y=Math.max(0.02,this.deathT); this.mesh.rotation.z+=dt*0.3; if(this.deathT<=0) this.remove(); return; }
     if(this.progress<1){ this.progress=Math.min(1,this.progress+dt/Math.max(1,this.def.time)); this.hp=Math.min(this.maxHp, this.hp+dt/Math.max(1,this.def.time)*this.maxHp*0.9); this.mesh.scale.y=0.05+0.95*this.progress; if(this.progress>=1){ game.log(`${this.def.name} fertig.`); game.onBuilt(this); } return; }
     const def=this.def; this.cd-=dt;
+    if(this.zettel){ const near=game.units.some(u=>u.team===1&&u.alive&&dist2(u.x,u.z,this.x,this.z)<(this.r+2.2)**2); if(near){ this.zettelT+=dt; if(this.zettelT>1.5) this.unstick(); } else this.zettelT=0; this.hpBar.set(this.hp/this.maxHp,this.team); this.hpBar.g.visible=true; this.ring.visible=!!this.selected; return; }
     if(def.turret){ this.scanT=(this.scanT||0)-dt; if(this.scanT<=0){ this.scanT=0.3; if(!this.target||this.target.dead||this.distTo(this.target)>def.turret.range) this.target=game.nearestEnemy(this, def.turret.range); }
       if(this.target&&!this.target.dead&&this.cd<=0){ this.cd=def.turret.cd; game.projectile(this.x,this.z,2.5,this.target,def.turret.dmg,def.turret.proj,def.turret.aoe||0,this); if(this.type==='ampwall') Audio.chord([65.4,98],0.3,0.3); } }
     if(def.spawn && this.team===2 && game.mission.enemyActive){ this.spawnT-=dt; if(this.spawnT<=0){ this.spawnT=def.spawnEvery*(game.mission.spawnMul||1); const n=game.units.filter(u=>u.team===2&&u.alive).length; if(n<(game.mission.enemyCap||18)){ const t=def.spawn[Math.floor(Math.random()*def.spawn.length)]; const u=game.spawnUnit(t,2,this.x,this.z+this.r+1); if(u){ const tgt=game.playerTarget(); if(tgt) u.orderMove(tgt.x,tgt.z,true); } } } }
@@ -863,9 +905,15 @@ const fx = {
   wave(x,z,r,color){ const m=new THREE.Mesh(GEO.ring, new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.8, side:THREE.DoubleSide})); m.rotation.x=-Math.PI/2; m.position.set(x,0.08,z); m.scale.setScalar(0.3); scene.add(m); this.list.push({m,t:0,life:0.5,r}); },
   hit(x,z,color){ const m=mesh(GEO.sph, new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.9}), 0.25,0.25,0.25, x,0.8,z,false); scene.add(m); this.list.push({m,t:0,life:0.25,r:0.9,up:true}); },
   heal(x,z){ this.wave(x,z,1.2,0x7fc45c); },
+  pop(e){ if(!e.mesh||e.isBuilding) return; e.popT=0.16; },
+  num(x,z,n){ this.text(x+rnd(0.6,-0.6),z,String(n),'#ffd9dc'); },
+  parts:[],
+  burst(x,z,color,n=14,power=1){ const m=new THREE.MeshBasicMaterial({color, transparent:true, opacity:1}); for(let i=0;i<n;i++){ const g=new THREE.Mesh(GEO.box, m); const s=0.12+Math.random()*0.16; g.scale.set(s,s*(color===0xf2ede4?0.1:1),s); g.position.set(x,0.6,z); g.rotation.set(rnd(3),rnd(3),rnd(3)); scene.add(g); const a=rnd(Math.PI*2), sp=(1.5+Math.random()*3)*power; this.parts.push({m:g, vx:Math.cos(a)*sp, vy:3+Math.random()*4*power, vz:Math.sin(a)*sp, t:0, life:0.7+Math.random()*0.5, mat:m}); } },
   text(x,z,txt,color='#f2ede4'){ const c=document.createElement('canvas'); c.width=256; c.height=64; const g=c.getContext('2d'); g.font="bold 36px 'Archivo Narrow', Arial Narrow, Arial"; g.textAlign='center'; g.fillStyle=color; g.shadowColor='#000'; g.shadowBlur=6; g.fillText(txt,128,44); const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t, transparent:true})); s.scale.set(4,1,1); s.position.set(x,2.2,z); scene.add(s); this.list.push({m:s,t:0,life:1.4,r:1,up:true,txt:true}); },
-  update(dt){ for(let i=this.list.length-1;i>=0;i--){ const e=this.list[i]; e.t+=dt; const p=e.t/e.life; if(e.txt){ e.m.position.y+=dt*1.2; e.m.material.opacity=1-p; } else if(e.up){ e.m.position.y+=dt*2; e.m.material.opacity=1-p; } else { e.m.scale.setScalar(0.3+e.r*p*1.1); e.m.material.opacity=0.8*(1-p); } if(p>=1){ scene.remove(e.m); if(e.m.material.map) e.m.material.map.dispose(); e.m.material.dispose(); this.list.splice(i,1); } } },
-  clear(){ this.list.forEach(e=>scene.remove(e.m)); this.list=[]; }
+  update(dt){
+    for(let i=this.parts.length-1;i>=0;i--){ const p=this.parts[i]; p.t+=dt; p.vy-=12*dt; p.m.position.x+=p.vx*dt; p.m.position.y=Math.max(0.05,p.m.position.y+p.vy*dt); p.m.position.z+=p.vz*dt; p.m.rotation.x+=dt*6; p.m.rotation.z+=dt*4; if(p.m.position.y<=0.05){ p.vx*=0.6; p.vz*=0.6; } p.mat.opacity=1-p.t/p.life; if(p.t>=p.life){ scene.remove(p.m); this.parts.splice(i,1); } }
+    for(let i=this.list.length-1;i>=0;i--){ const e=this.list[i]; e.t+=dt; const p=e.t/e.life; if(e.txt){ e.m.position.y+=dt*1.2; e.m.material.opacity=1-p; } else if(e.up){ e.m.position.y+=dt*2; e.m.material.opacity=1-p; } else { e.m.scale.setScalar(0.3+e.r*p*1.1); e.m.material.opacity=0.8*(1-p); } if(p>=1){ scene.remove(e.m); if(e.m.material.map) e.m.material.map.dispose(); e.m.material.dispose(); this.list.splice(i,1); } } },
+  clear(){ this.list.forEach(e=>scene.remove(e.m)); this.list=[]; this.parts.forEach(p=>scene.remove(p.m)); this.parts=[]; }
 };
 /* ---------- Partie: Zustand, Befehle, Gegner-KI ---------- */
 class Game {
@@ -873,6 +921,7 @@ class Game {
     game=this; this.mission=mission; this.units=[]; this.buildings=[]; this.kales=[]; this.projs=[]; this.kale=mission.startKale||0; this.ruf=mission.startRuf||0; this.time=0; this.selected=[]; this.over=false; this.speed=1;
     this.msgQueue=[]; this.msgT=0; this.waveIdx=0; this.objectives=mission.objectives.map(o=>Object.assign({done:false},o)); this.flags={}; this.queue=[]; this.queueT=0; this.placing=null; this.heat=0; this.triggersDone=new Set();
     this.unlocked = store.get('abilities', {}); if(mission.unlock) mission.unlock.forEach(a=>this.unlocked[a]=true); store.set('abilities', this.unlocked);
+    const diff=store.get('diff','normal'); mission.waveMul={leicht:0.7,normal:1,hart:1.4}[diff]; mission.enemyHpMul={leicht:0.8,normal:1,hart:1.25}[diff];
     seed=mission.seed||5; this.world=new World(mission.map);
     scene.fog = new THREE.Fog(mission.fog||0x0a0a0a, mission.fogNear||60, mission.fogFar||170); scene.background=new THREE.Color(mission.fog||0x0a0a0a);
     hemi.color.setHex(mission.sky||0x8fa3c9); hemi.groundColor.setHex(mission.groundLight||0x2a2420); hemi.intensity=mission.hemi||0.55; sun.color.setHex(mission.sun||0xffffff); sun.intensity=mission.sunI||0.95;
@@ -880,7 +929,7 @@ class Game {
     if(mission.rain||mission.snow) this.makeRain(!!mission.snow);
     this.dome=new THREE.Mesh(new THREE.SphereGeometry(300,24,12), new THREE.MeshBasicMaterial({map:Tex.sky(mission.skyTop||'#05060a', mission.skyHorizon||'#1b2130'), side:THREE.BackSide, fog:false, toneMapped:false})); scene.add(this.dome);
     if(mission.stars!==false){ const n=700; const pos=new Float32Array(n*3); for(let i=0;i<n;i++){ const a=rnd(Math.PI*2), e=rnd(1.2,0.12); pos[i*3]=Math.cos(a)*Math.cos(e)*290; pos[i*3+1]=Math.sin(e)*290; pos[i*3+2]=Math.sin(a)*Math.cos(e)*290; } const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); this.stars=new THREE.Points(g,new THREE.PointsMaterial({color:0xdde6ff,size:1.2,sizeAttenuation:false,fog:false,transparent:true,opacity:mission.starsOpacity??0.7})); this.dome.add(this.stars); }
-    this.alerts=[]; this.lastAlert=null;
+    this.alerts=[]; this.lastAlert=null; this.stats={kills:0, lost:0, zettelOn:0, zettelOff:0, levels:0, waves:0}; this.waveN=0; this.nextWave=mission.director? mission.director.start : null; this.threat=0;
     const hq=this.buildings.find(b=>b.team===1); const c=mission.camStart||(hq?{x:hq.x,z:hq.z}:{x:0,z:0}); camTo(c.x,c.z,true); cam.yaw=mission.yaw!==undefined?mission.yaw:Math.PI*0.25; cam.dist=cam.tdist=mission.camDist||42;
     this.theo=this.units.find(u=>u.type==='theo'); this.john=this.units.find(u=>u.type==='john');
   }
@@ -893,14 +942,16 @@ class Game {
   say(who,line,dur=5.5,name){ this.msgQueue.push({who,line,dur,name}); }
   enemies(team){ return team===1? this.units.filter(u=>u.team===2&&u.alive).concat(this.buildings.filter(b=>b.team===2&&b.alive)) : this.units.filter(u=>u.team===1&&u.alive).concat(this.buildings.filter(b=>b.team===1&&b.alive&&b.type!=='wald')); }
   nearestEnemy(e, range){ let best=null, bd=range*range; const list=this.enemies(e.team); for(const o of list){ let d; if(o.isBuilding){ const hx=o.r; const px=clamp(e.x,o.x-hx,o.x+hx), pz=clamp(e.z,o.z-hx,o.z+hx); d=dist2(e.x,e.z,px,pz); } else d=dist2(e.x,e.z,o.x,o.z); if(d<bd){ bd=d; best=o; } } return best; }
+  nearestEnemyOfType(e,type,range){ let best=null, bd=range*range; for(const o of this.units){ if(o.team===e.team||!o.alive||o.type!==type) continue; const d=dist2(e.x,e.z,o.x,o.z); if(d<bd){bd=d;best=o;} } return best; }
+  nearestEnemyBuilding(e,range){ let best=null, bd=range*range; for(const o of this.buildings){ if(o.team===e.team||!o.alive||o.team===0) continue; const px=clamp(e.x,o.x-o.r,o.x+o.r), pz=clamp(e.z,o.z-o.r,o.z+o.r); const d=dist2(e.x,e.z,px,pz); if(d<bd){bd=d;best=o;} } return best; }
   nearestKale(x,z){ let best=null, bd=Infinity; for(const k of this.kales){ if(k.amount<=0) continue; const d=dist2(x,z,k.x,k.z); if(d<bd){bd=d;best=k;} } return best; }
   nearestDropoff(x,z){ let best=null, bd=Infinity; for(const b of this.buildings){ if(b.team!==1||b.dead||!b.def.dropoff||b.progress<1) continue; const d=dist2(x,z,b.x,b.z); if(d<bd){bd=d;best=b;} } return best; }
   playerTarget(){ const bs=this.buildings.filter(b=>b.team===1&&b.alive&&b.type!=='wald'); if(bs.length) return bs[Math.floor(Math.random()*bs.length)]; const us=this.units.filter(u=>u.team===1&&u.alive); return us.length?us[0]:null; }
   areaDamage(x,z,r,dmg,team,from){ for(const e of this.enemies(team)){ const d=e.isBuilding? Math.max(0,Math.sqrt(dist2(x,z,e.x,e.z))-e.r) : Math.sqrt(dist2(x,z,e.x,e.z)); if(d<=r) e.damage(dmg,from); } }
   projectile(x,z,y,target,dmg,color,aoe,from){ const m=mesh(GEO.sph, new THREE.MeshBasicMaterial({color}), 0.18,0.18,0.18, x,y,z,false); scene.add(m); this.projs.push({m,x,z,y,target,dmg,aoe,from,t:0,sx:x,sz:z,sy:y}); }
   onDeath(e, from){
-    if(e.isBuilding){ this.log(`${e.def.name} ${e.team===2?'abgerissen':'verloren'}.`); if(e.team===2) this.addRuf(15); if(this.selected.includes(e)) this.deselect(e); }
-    else { if(e.team===2 && from && from.team===1) this.addRuf(3); if(e.def.hero && e.team===1){ this.log(`${e.def.name} ist gefallen.`); } if(this.selected.includes(e)) this.deselect(e); }
+    if(e.isBuilding){ this.log(`${e.def.name} ${e.team===2?'abgerissen':'verloren'}.`); if(e.team===2){ this.addRuf(15); if(from&&from.gainXp) from.gainXp(4); } else { this.stats.lost++; cam.shake=Math.max(cam.shake||0,0.8); } if(this.selected.includes(e)) this.deselect(e); fx.burst(e.x,e.z, e.team===2?0xf2ede4:0xe0b23a, 26, 1.6); }
+    else { if(e.team===2 && from && from.team===1){ this.addRuf(e.def.boss?30:3); this.stats.kills++; if(from.gainXp) from.gainXp(e.def.boss?6:1); if(this.stats.kills%10===0) this.say('theo',['Dreißig. Vielleicht fünfunddreißig.','Vor dreißig fängst du an zu existieren.','Großartigkeit riecht nicht gut.','Lärm ist ehrlicher als alles, was wir Ordnung nennen.'][(this.stats.kills/10-1)%4],3); } if(e.def.hero && e.team===1){ this.log(`${e.def.name} ist gefallen.`); cam.shake=1; } if(this.selected.includes(e)) this.deselect(e); fx.burst(e.x,e.z, e.team===2?0xf2ede4:(e.type==='maus'?0x9a9a9a:0x2a2a2a), e.def.boss?40:12, e.team===2?1.2:0.8); }
     if(this.mission.onDeath) this.mission.onDeath(this,e);
   }
   onBuilt(b){ if(this.mission.onBuilt) this.mission.onBuilt(this,b); }
@@ -929,8 +980,8 @@ class Game {
   useAbility(id){ const a=ABILITIES[id]; const u=this.units.find(u=>u.type===a.owner&&u.alive); if(!u) return; if(a.req&&!this.unlocked[a.req]) return; if(u.cooldowns[id]>0){ this.log(`${a.name}: noch nicht bereit.`); return; } if(this.ruf<a.ruf){ this.log(`${a.name}: zu wenig Ruf.`); return; }
     this.ruf-=a.ruf; u.cooldowns[id]=a.cd;
     if(id==='gurren'){ Audio.purr(1.6); fx.wave(u.x,u.z,UNITS.theo.aura.radius,0xe0b23a); this.units.forEach(o=>{ if(o.team===1&&o.alive&&dist2(o.x,o.z,u.x,u.z)<UNITS.theo.aura.radius**2){ o.hp=Math.min(o.maxHp,o.hp+60); o.buff=8; } }); this.say('theo','(tief, unkontrolliert, involuntär)',3); }
-    if(id==='fsucker'){ Audio.chord([82.4,123.5,164.8],0.6,0.7); Audio.hat(0.3); fx.wave(u.x,u.z,5.5,0xe6394a); this.areaDamage(u.x,u.z,5.5,70,1,u); this.say('theo','Fucker Sucker. Das ist eine Haltung.',3); }
-    if(id==='riff'){ Audio.chord([41.2,61.7,82.4],1.2,0.8); fx.wave(u.x,u.z,7,0xf2ede4); for(const e of this.enemies(1)){ const d=Math.sqrt(dist2(u.x,u.z,e.x,e.z)); if(d<=7+(e.r||0)){ e.damage(45,u); if(!e.isBuilding) e.stun=3; } } this.say('john','Langsam. Schwer. Jeder Ton wie ein Stein.',3); }
+    if(id==='fsucker'){ Audio.chord([82.4,123.5,164.8],0.6,0.7); Audio.hat(0.3); fx.wave(u.x,u.z,5.5,0xe6394a); fx.burst(u.x,u.z,0xe6394a,30,2.2); cam.shake=1.1; this.areaDamage(u.x,u.z,5.5,70,1,u); this.say('theo','Fucker Sucker. Das ist eine Haltung.',3); }
+    if(id==='riff'){ Audio.chord([41.2,61.7,82.4],1.2,0.8); fx.wave(u.x,u.z,7,0xf2ede4); for(const e of this.enemies(1)){ const d=Math.sqrt(dist2(u.x,u.z,e.x,e.z)); if(d<=7+(e.r||0)){ e.damage(45,u); if(!e.isBuilding){ e.stun=3; const dx=e.x-u.x, dz=e.z-u.z; const l=Math.hypot(dx,dz)||1; e.x+=dx/l*2.5; e.z+=dz/l*2.5; } } } cam.shake=0.9; this.say('john','Langsam. Schwer. Jeder Ton wie ein Stein.',3); }
     if(id==='blick'){ Audio.thud(); fx.wave(u.x,u.z,8,0xb9b4c7); this.units.forEach(e=>{ if(e.team===2&&e.alive&&dist2(e.x,e.z,u.x,u.z)<64){ e.flee=4; e.attackTarget=null; } }); this.say('cat','Registriert. Für unwichtig befunden.',3,'Smokey'); }
     UI.selectionChanged();
   }
@@ -951,19 +1002,24 @@ class Game {
     const [wx,wz]=w.toWorld(cx,cz); const own=this.buildings.filter(b=>b.team===1&&b.alive&&b.type!=='wald'); if(!own.length) return true; return own.some(b=>dist2(b.x,b.z,wx,wz) < (this.mission.buildRadius||13)**2); }
   enqueue(type){ const def=UNITS[type]; if(!this.hasBuilding('proberaum')){ this.log('Dafür braucht es einen Proberaum.'); return; } if(!this.reqOk(def)){ this.log(`${def.name} braucht: ${BUILDINGS[def.req].name}.`); return; } if(this.queue.length>=8){ this.log('Warteschlange voll.'); return; } if(!this.canAfford(def)){ this.log('Zu wenig Grünkohl.'); return; } this.kale-=def.cost; this.queue.push(type); UI.refreshBuild(); }
   dequeue(type){ const i=this.queue.lastIndexOf(type); if(i<0) return; if(i===0) this.queueT=0; this.queue.splice(i,1); this.kale+=UNITS[type].cost; UI.refreshBuild(); }
-  updateQueue(dt){ if(!this.queue.length) return; const pr=this.buildings.filter(b=>b.team===1&&b.alive&&b.type==='proberaum'&&b.progress>=1); if(!pr.length) return; const type=this.queue[0]; this.queueT+=dt*Math.min(2, 1+0.5*(pr.length-1)); if(this.queueT>=UNITS[type].time){ this.queueT=0; this.queue.shift(); const b=pr[0]; const u=this.spawnUnit(type,1,b.x,b.z+b.r+1.2); if(type==='maus'){ const k=this.nearestKale(u.x,u.z); if(k) u.orderHarvest(k); } else { u.orderMove(b.x+rnd(3,-3), b.z+b.r+3, false); } this.log(`${UNITS[type].name} bereit.`); if(type==='maus') Audio.squeak(); UI.refreshBuild(); } }
+  updateQueue(dt){ if(!this.queue.length) return; const pr=this.buildings.filter(b=>b.team===1&&b.alive&&b.type==='proberaum'&&b.progress>=1&&!b.zettel); if(!pr.length) return; const type=this.queue[0]; this.queueT+=dt*Math.min(2, 1+0.5*(pr.length-1)); if(this.queueT>=UNITS[type].time){ this.queueT=0; this.queue.shift(); const b=pr[0]; const u=this.spawnUnit(type,1,b.x,b.z+b.r+1.2); if(type==='maus'){ const k=this.nearestKale(u.x,u.z); if(k) u.orderHarvest(k); } else { u.orderMove(b.x+rnd(3,-3), b.z+b.r+3, false); } this.log(`${UNITS[type].name} bereit.`); if(type==='maus') Audio.squeak(); UI.refreshBuild(); } }
   // Wellen
   updateWaves(dt){ const m=this.mission; if(!m.waves) return; while(this.waveIdx<m.waves.length && m.waves[this.waveIdx].t<=this.time){ this.launchWave(m.waves[this.waveIdx]); this.waveIdx++; } if(m.repeat && this.time>m.repeat.after){ this.repT=(this.repT||m.repeat.every)-dt; if(this.repT<=0){ this.repT=m.repeat.every; const k=Math.floor((this.time-m.repeat.after)/m.repeat.every); const w={units:{}, from:m.repeat.from}; for(const t in m.repeat.units) w.units[t]=m.repeat.units[t]+Math.floor(k*(m.repeat.grow||0.5)); this.launchWave(w); } } }
+  updateDirector(dt){ const d=this.mission.director; if(!d||this.nextWave===null) return; if(d.after && !d.after(this)) { this.nextWave=this.time+d.start; return; }
+    if(this.time>=this.nextWave){ const k=this.waveN; const mul=this.mission.waveMul||1; const n=Math.max(1,Math.round((d.base+k*(d.grow||0.6))*mul)); const units={}; for(let i=0;i<n;i++){ const t=d.types[Math.min(d.types.length-1, Math.floor(Math.random()*Math.min(d.types.length, 1+Math.floor(k/2)+1)))]; units[t]=(units[t]||0)+1; }
+      if(d.boss && k>0 && k%d.boss===0) units.dezernent=(units.dezernent||0)+1; if(d.bagger && k>=d.bagger && k%2===0) units.bagger=(units.bagger||0)+1;
+      this.launchWave({units, from:d.from, target:d.target}); this.waveN++; this.stats.waves++; this.nextWave=this.time+Math.max(18, d.every*Math.pow(0.96,k)); UI.refreshObjectives(); } }
   launchWave(w){ const from=w.from||this.mission.spawn; const pts=(Array.isArray(from)&&Array.isArray(from[0]))?from:[from]; const p=pts[Math.floor(Math.random()*pts.length)]; const [x,z]=this.world.toWorld(p[0],p[1]); const tgt=w.target? this.buildings.find(b=>b.type===w.target&&b.alive) : this.playerTarget(); let n=0; for(const t in w.units){ for(let i=0;i<w.units[t];i++){ const u=this.spawnUnit(t,2,x+rnd(2,-2),z+rnd(2,-2)); if(tgt) u.orderMove(tgt.x,tgt.z,true); n++; } } if(w.msg) this.say(w.msgWho||'sys', w.msg); if(n) this.alert(x,z,`Das Bauamt rückt an aus ${this.dirName(x,z)}.`,'wave'); if(w.say) w.say(this); }
   update(dt){
     if(this.over) return; this.time+=dt; const m=this.mission;
+    this.thT=(this.thT||0)+dt; if(this.thT>0.8){ this.thT=0; const own=this.units.filter(u=>u.team===1&&u.alive).concat(this.buildings.filter(b=>b.team===1&&b.alive)); let th=0; for(const e of this.units){ if(e.team!==2||!e.alive) continue; th=Math.max(th,1); if(own.some(o=>dist2(o.x,o.z,e.x,e.z)<26*26)){ th=2; break; } } this.threat=th; Audio.setIntensity(m.heat?0:th); }
     this.units.forEach(u=>u.update(dt)); this.buildings.forEach(b=>b.update(dt));
     // Trennung zwischen Einheiten
     const us=this.units; for(let i=0;i<us.length;i++){ const a=us[i]; if(a.dead) continue; for(let j=i+1;j<us.length;j++){ const b=us[j]; if(b.dead) continue; const dx=b.x-a.x, dz=b.z-a.z; const d2=dx*dx+dz*dz; const md=a.r+b.r+0.15; if(d2<md*md&&d2>1e-6){ const d=Math.sqrt(d2); const push=(md-d)*0.5; const nx=dx/d, nz=dz/d; const wa=a.state==='idle'?0.15:1, wb=b.state==='idle'?0.15:1; a.x-=nx*push*wa; a.z-=nz*push*wa; b.x+=nx*push*wb; b.z+=nz*push*wb; } } }
     this.units=this.units.filter(u=>!u.removed); this.buildings=this.buildings.filter(b=>!b.removed);
     // Projektile
     for(let i=this.projs.length-1;i>=0;i--){ const p=this.projs[i]; p.t+=dt*3.2; const t=p.target; const tx=t.x, tz=t.z; const ty=t.isBuilding?1.2:0.7; const k=Math.min(1,p.t); p.m.position.set(lerp(p.sx,tx,k), lerp(p.sy,ty,k)+Math.sin(k*Math.PI)*1.5, lerp(p.sz,tz,k)); if(k>=1){ if(!t.dead){ if(p.aoe){ fx.wave(tx,tz,p.aoe,0xe6394a); this.areaDamage(tx,tz,p.aoe,p.dmg,p.from.team,p.from); } else { t.damage(p.dmg,p.from); fx.hit(tx,tz, p.from.team===1?0xe6394a:0x9fd8ee); } } scene.remove(p.m); p.m.material.dispose(); this.projs.splice(i,1); } }
-    this.updateQueue(dt); this.updateWaves(dt); fx.update(dt); this.ewT=(this.ewT||0)+dt; if(this.ewT>1){ this.ewT=0; this.earlyWarning(); }
+    this.updateQueue(dt); this.updateWaves(dt); this.updateDirector(dt); fx.update(dt); this.ewT=(this.ewT||0)+dt; if(this.ewT>1){ this.ewT=0; this.earlyWarning(); }
     if(m.heat){ this.heat=Math.min(1, this.time/ (m.heatTime||240)); }
     if(this.rain){ const a=this.rain.geometry.attributes.position; const sp=this.snow?3.5:24, len=this.snow?0.18:1.1; for(let i=0;i<a.count;i+=2){ let y=a.getY(i)-dt*sp; let x=a.getX(i)+(this.snow?Math.sin(this.time*1.3+i)*dt*0.8:0); if(y<0){ y=40; x=cam.x+rnd(80,-80); a.setZ(i,cam.z+rnd(80,-80)); a.setZ(i+1,a.getZ(i)); } a.setY(i,y); a.setX(i,x); a.setY(i+1,y-len); a.setX(i+1,x+0.06); } a.needsUpdate=true; }
     // Dialog
@@ -976,8 +1032,8 @@ class Game {
       if(m.lose && m.lose(this)) this.lose(m.loseText? m.loseText(this):'Die Band ist am Ende.'); }
     UI.tick(dt);
   }
-  win(){ if(this.over) return; this.over=true; const done=store.get('progress',0); store.set('progress', Math.max(done, this.mission.index+1)); setTimeout(()=>Flow.debrief(this.mission, true), 1200); }
-  lose(text){ if(this.over) return; this.over=true; this.loseText=text; setTimeout(()=>Flow.debrief(this.mission, false), 1200); }
+  win(){ if(this.over) return; this.over=true; const done=store.get('progress',0); store.set('progress', Math.max(done, this.mission.index+1)); const vet=store.get('vet',{}); this.units.forEach(u=>{ if(u.def.hero&&u.team===1&&u.alive) vet[u.type]=Math.max(vet[u.type]||0,u.level); }); store.set('vet',vet); Audio.setIntensity(0); setTimeout(()=>Flow.debrief(this.mission, true), 1200); }
+  lose(text){ if(this.over) return; this.over=true; this.loseText=text; Audio.setIntensity(0); setTimeout(()=>Flow.debrief(this.mission, false), 1200); }
   dispose(){ this.units.forEach(u=>u.remove()); this.buildings.forEach(b=>b.remove()); this.kales.forEach(k=>k.remove()); this.projs.forEach(p=>scene.remove(p.m)); fx.clear(); if(this.rain) scene.remove(this.rain); if(this.dome){ scene.remove(this.dome); this.dome.material.map.dispose(); } this.world.dispose(); Audio.stopRain(); }
 }
 /* ---------- Eingabe: Maus, Tastatur, Touch ---------- */
@@ -1073,11 +1129,13 @@ const UI = {
   },
   log(t,cls){ const d=document.createElement('div'); if(cls) d.className=cls; d.textContent=t; const box=$('log'); box.appendChild(d); while(box.children.length>6) box.removeChild(box.firstChild); setTimeout(()=>d.classList.add('fade'),7000); setTimeout(()=>d.remove(),8200); },
   dialog(q){ const b=$('dialog'); if(!q){ b.classList.remove('on'); return; } const names={theo:'Theo',john:'John',sys:'',cat:'Smokey',bauamt:'Das Bauamt',adriana:'Adriana',susanna:'Susanna',bounty:'Bounty'}; $('dlg-who').textContent=q.name||names[q.who]||''; $('dlg-who').className='who '+q.who; $('dlg-line').textContent=q.line; b.classList.add('on'); },
+  flash(){ if(this.flashT&&now()-this.flashT<400) return; this.flashT=now(); const d=$('dmgflash'); d.classList.add('on'); setTimeout(()=>d.classList.remove('on'),60); },
   hint(t){ const h=$('cursorhint'); if(!t){ h.classList.remove('on'); return; } h.textContent=t; h.classList.add('on'); },
   selbox(x1,y1,x2,y2){ const b=$('selbox'); if(x1===null){ b.style.display='none'; return; } b.style.display='block'; b.style.left=Math.min(x1,x2)+'px'; b.style.top=Math.min(y1,y2)+'px'; b.style.width=Math.abs(x2-x1)+'px'; b.style.height=Math.abs(y2-y1)+'px'; },
   start(){ $('hud').classList.add('on'); $('hud-mission').textContent=game.mission.title; $('b-speed').textContent='1×'; this.refreshBuild(); this.refreshObjectives(); this.selectionChanged(); this.miniBase=null; $('log').innerHTML=''; },
   stop(){ $('hud').classList.remove('on'); this.setPlacing(null); },
-  refreshObjectives(){ const ul=$('objlist'); ul.innerHTML=''; game.objectives.forEach(o=>{ const li=document.createElement('li'); li.textContent=typeof o.text==='function'?o.text(game):o.text; if(o.done) li.classList.add('done'); if(o.optional) li.classList.add('opt'); ul.appendChild(li); }); },
+  refreshObjectives(){ const w=$('wave'); if(game.mission.director&&game.nextWave!==null){ w.hidden=false; } else w.hidden=true;
+    const ul=$('objlist'); ul.innerHTML=''; game.objectives.forEach(o=>{ const li=document.createElement('li'); li.textContent=typeof o.text==='function'?o.text(game):o.text; if(o.done) li.classList.add('done'); if(o.optional) li.classList.add('opt'); ul.appendChild(li); }); },
   refreshBuild(){ const g=$('buildgrid'); g.innerHTML=''; const m=game.mission; const list = this.tab==='b' ? (m.build||PLAYER_BUILD) : (m.train||PLAYER_TRAIN);
     if(!list.length){ g.innerHTML='<div style="grid-column:1/-1;color:var(--ash);font-size:.8rem;padding:6px">Hier wird nichts gebaut. Noch nicht.</div>'; }
     list.forEach(type=>{ const isB=this.tab==='b'; const def=isB?BUILDINGS[type]:UNITS[type]; const b=document.createElement('button'); b.className='bb'; b.id='bb-'+type;
@@ -1092,7 +1150,7 @@ const UI = {
   setPlacing(type){ game.placing=type; if(this.ghost){ scene.remove(this.ghost); this.ghost=null; } if(type){ this.ghost=buildBuildingModel(type,1); this.ghost.traverse(o=>{ if(o.material&&!o.isLineSegments){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=0.55; } o.castShadow=false; }); const def=BUILDINGS[type]; const fp=mesh(GEO.plane, new THREE.MeshBasicMaterial({color:0x7fc45c, transparent:true, opacity:0.35, side:THREE.DoubleSide}), def.size*CELL, def.size*CELL, 1, 0,0.03,0,false); fp.rotation.x=-Math.PI/2; fp.name='fp'; this.ghost.add(fp); scene.add(this.ghost); this.hint(`${def.name} platzieren · Esc bricht ab`); } else this.hint(Input.attackMode?'Angriffsbewegung: Ziel anklicken':null); this.refreshBuild(); },
   updateGhost(hit){ if(!this.ghost||!hit) return; const [cx,cz]=game.world.toCell(hit.x,hit.z); const def=BUILDINGS[game.placing]; const [x,z]=game.world.toWorld(cx,cz); this.ghost.position.set(x+(def.size%2?0:CELL/2),0,z+(def.size%2?0:CELL/2)); const ok=game.placeValid(game.placing,cx,cz)&&game.canAfford(def); this.ghost.getObjectByName('fp').material.color.setHex(ok?0x7fc45c:0xe6394a); },
   cursorFor(hit){ if(!game||Input.mouse.down) return; let c='default'; if(game.placing) c='crosshair'; else if(Input.attackMode) c='crosshair'; else if(hit&&hit.entity){ if(hit.entity.team===2&&game.ownUnits().length) c='crosshair'; else c='pointer'; } canvas.style.cursor=c; },
-  selectionChanged(){ const p=$('selpanel'); const sel=game.selected.filter(e=>e.alive); if(!sel.length){ p.classList.remove('on'); return; } p.classList.add('on'); const e=sel[0]; const def=e.def; $('sel-portrait').innerHTML=pic(e.type); $('sel-name').textContent = sel.length>1? `${def.name} +${sel.length-1}` : def.name; $('sel-desc').textContent = e.isBuilding&&e.progress<1 ? `Im Bau … ${Math.round(e.progress*100)} %` : def.desc; $('sel-hp').style.width=Math.round(100*e.hp/e.maxHp)+'%';
+  selectionChanged(){ const p=$('selpanel'); const sel=game.selected.filter(e=>e.alive); if(!sel.length){ p.classList.remove('on'); return; } p.classList.add('on'); const e=sel[0]; const def=e.def; $('sel-portrait').innerHTML=pic(e.type); $('sel-name').innerHTML = (sel.length>1? `${def.name} +${sel.length-1}` : def.name) + (e.level? ` <span class="stars">${'★'.repeat(e.level)}</span>`:''); $('sel-desc').textContent = e.isBuilding&&e.progress<1 ? `Im Bau … ${Math.round(e.progress*100)} %` : def.desc; $('sel-hp').style.width=Math.round(100*e.hp/e.maxHp)+'%';
     const ab=$('abilities'); ab.innerHTML=''; if(!e.isBuilding&&e.team===1){ Object.entries(ABILITIES).forEach(([id,a])=>{ if(a.owner!==e.type) return; if(a.req&&!game.unlocked[a.req]) return; const b=document.createElement('button'); b.className='ab'; b.dataset.tip=a.tip; b.innerHTML=`<span class="ic">${a.ic}</span><span class="k">${a.key} · ${a.ruf}★</span><i class="cd"></i>`; b.onclick=()=>game.useAbility(id); b.dataset.id=id; ab.appendChild(b); }); }
     if(!e.isBuilding && e.team===1 && game.ownUnits().length){ const am=document.createElement('button'); am.className='ab'; am.dataset.tip='Angriffsbewegung (X): hingehen und alles angreifen, was im Weg steht.'; am.innerHTML='<span class="ic">⚔️</span><span class="k">X · Angriff</span>'; am.onclick=()=>{ Input.attackMode=true; UI.hint('Angriffsbewegung: Ziel anklicken'); }; ab.appendChild(am); const st=document.createElement('button'); st.className='ab'; st.dataset.tip='Halt (H): stehen bleiben.'; st.innerHTML='<span class="ic">✋</span><span class="k">H · Halt</span>'; st.onclick=()=>game.ownUnits().forEach(u=>u.orderStop()); ab.appendChild(st); }
     if(e.isBuilding && e.team===1 && e.def.trains){ const b=document.createElement('button'); b.className='ab'; b.innerHTML='<span class="ic">🐭</span><span class="k">Einheiten</span>'; b.onclick=()=>$('tab-u').click(); ab.appendChild(b); }
@@ -1103,6 +1161,7 @@ const UI = {
     // Produktionsfortschritt
     if(this.tab==='u'&&game.queue.length){ const el=$('bb-'+game.queue[0]); if(el) el.querySelector('.prog').style.width=(game.queueT/UNITS[game.queue[0]].time*100)+'%'; }
     else if(this.tab==='b'){ game.buildings.forEach(b=>{ if(b.team===1&&b.progress<1){ const el=$('bb-'+b.type); if(el) el.querySelector('.prog').style.width=(b.progress*100)+'%'; } }); }
+    if(game.mission.director&&game.nextWave!==null){ const t=Math.max(0,game.nextWave-game.time); $('wave-t').textContent=`Welle ${game.waveN+1} · ${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`; }
     const tm=$('objtimer'); const m=game.mission; if(m.timer){ const t=m.timer(game); if(t!==null){ tm.hidden=false; tm.textContent=t; } else tm.hidden=true; } else tm.hidden=true;
     if(m.heat){ tm.hidden=false; tm.textContent=`Hitze ${Math.round(game.heat*100)} %`; tm.style.color = game.heat>0.7?'var(--blood-bright)':'var(--ruf)'; } else tm.style.color='';
     if(now()-this.lastMini>120){ this.lastMini=now(); this.drawMini(); }
@@ -1153,22 +1212,27 @@ const MISSIONS = [
  { index:0, chapter:'Prolog', title:'Borehamwood, 1995', caption:'Borehamwood. 1995. This is where it started.', seed:3,
    fog:0x0d0f14, sky:0x7a8fb8, rain:true, camDist:36, skyTop:'#06070c', skyHorizon:'#1c2233',
    map:{w:40,h:40,ground:'grass',treeDensity:0.07,brick:0x5a3a2e,lit:0.6,graffiti:false,paint:(()=>{ const o=[{t:'asphalt',x1:0,z1:20,x2:39,z2:20,w:3}]; for(let i=0;i<5;i++){ o.push({t:'block',x:3+i*7,z:14,w:4,h:2}); o.push({t:'block',x:4+i*7,z:25,w:4,h:2}); } clearArea(o,'dirt',17,28,6,6); return o; })()},
-   startKale:200, build:['buehne'], train:[], buildRadius:16,
-   brief:[['sys','Borehamwood roch nicht nach Rock’n’Roll. Es roch nach nassem Rasen, warmem Plastik und diesem ewigen Vorstadtlicht.'],['sys','Zwei Käfige. Zwei Welten. Die Decke dazwischen dünn wie ein schlechtes Versprechen.'],['theo','Was ist das?'],['john','Musik.'],['theo','Das will ich machen.'],['john','Du weißt nicht wie.'],['theo','Noch nicht.']],
+   startKale:320, startRuf:40, build:['buehne','heuturm'], train:[], buildRadius:16, enemyActive:true, spawn:[[2,21],[37,21]],
+   director:{start:45, every:38, base:2, grow:0.7, types:['nachbar'], from:[[2,20],[37,20]], after:g=>g.objectives[1].done},
+   brief:[['sys','Borehamwood roch nicht nach Rock’n’Roll. Es roch nach nassem Rasen, warmem Plastik und diesem ewigen Vorstadtlicht.'],['sys','Zwei Käfige. Zwei Welten. Die Decke dazwischen dünn wie ein schlechtes Versprechen.'],['theo','Was ist das?'],['john','Musik.'],['theo','Das will ich machen.'],['john','Du weißt nicht wie.'],['theo','Noch nicht.'],['sys','Die Nachbarn hören mit. Sobald ihr spielt, kommen Lärmbeschwerden im Bademantel. Haltet die Bühne, bis der Song durch ist.']],
    objectives:[
      {text:'Theo zum Radio bringen (Rechtsklick bewegt)', check:g=>{ const r=g.buildings.find(b=>b.type==='radio'); return g.theo&&g.theo.alive&&r&&g.theo.distTo(r)<2.5; }, onDone:g=>{ g.say('theo','Das will ich machen.'); g.say('john','Du weißt nicht mal womit.'); g.say('theo','Noch nicht. Aber ich werde es lernen.'); }},
      {text:'John zum Radio bringen (J wählt John, T wählt Theo)', check:g=>{ const r=g.buildings.find(b=>b.type==='radio'); return g.john&&g.john.alive&&r&&g.john.distTo(r)<2.5; }, onDone:g=>{ g.say('john','…'); g.say('sys','Er dachte: Ja. Das will ich auch. Er sagte es nicht. Das war nicht Johns Art.'); g.log('Bühne freigeschaltet: Tab „Gebäude“ rechts.'); }},
-     {text:'Eine Bühne bauen (Tab „Gebäude“, dann auf den Boden klicken)', check:g=>g.hasBuilding('buehne'), onDone:g=>{ g.say('sys','Die Band war nicht gegründet worden. Sie war entstanden.'); }}
+     {text:'Eine Bühne bauen (Tab „Gebäude“, dann auf den Boden klicken)', check:g=>g.hasBuilding('buehne'), onDone:g=>{ g.flags.stage=g.time; g.say('sys','Die Band war nicht gegründet worden. Sie war entstanden.'); g.say('bauamt','Lärmbeschwerde! Es ist halb elf!',4,'Nachbar'); g.say('sys','Heutürme kosten 80 Grünkohl. John: R für den schweren Riff. Theo: G für Gurren.',8); }},
+     {text:'Den Song zu Ende spielen: Bühne 2:00 halten', check:g=>g.flags.stage!==undefined && g.time-g.flags.stage>=120 && g.hasBuilding('buehne')}
    ],
+   timer:g=>{ if(g.flags.stage===undefined) return null; const t=Math.max(0,120-(g.time-g.flags.stage)); return `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`; },
+   lose:g=>g.flags.stage!==undefined && !g.hasBuilding('buehne'), loseText:()=>'Die Bühne ist weg. Die Nachbarn haben gewonnen. Diesmal.',
    setup(g){ g.spawnBuilding('kaefig',1,20,30); g.spawnBuilding('radio',0,20,10); g.units.push(new Unit('john',1,...g.world.toWorld(18,32))); g.units.push(new Unit('theo',1,...g.world.toWorld(22,32)));
      g.say('sys','Linksklick wählt eine Figur. Rechtsklick schickt sie los. Karte mit der Maus ziehen, Mausrad zoomt, Shift + Ziehen wählt mehrere.',9); },
-   triggers:[ {when:g=>g.time>12, run:g=>{ g.say('sys','Es war ein gewöhnlicher Dienstagabend. Dann kam der Song. Durch die Wand.'); }}, {when:g=>g.time>80&&!g.hasBuilding('buehne')&&g.objectives[1].done, run:g=>g.say('sys','Die Bühne kostet Grünkohl. 200 sind da. Das reicht genau einmal.')} ],
+   triggers:[ {when:g=>g.time>12, run:g=>{ g.say('sys','Es war ein gewöhnlicher Dienstagabend. Dann kam der Song. Durch die Wand.'); }}, {when:g=>g.time>80&&!g.hasBuilding('buehne')&&g.objectives[1].done, run:g=>g.say('sys','Die Bühne kostet 180 Grünkohl. 320 sind da. Der Rest reicht für einen Heuturm.')}, {when:g=>g.stats.zettelOn>0, run:g=>g.say('sys','Ein Zettel klebt. Solange er klebt, steht das Gebäude still. Eine Einheit daneben reißt ihn in anderthalb Sekunden ab.',8)} ],
    outro:[['sys','Von diesem Abend an, wenn die Nacht ruhig war und das Haus schlief, trommelten beide leise gegen ihre Käfigstäbe. Getrennt. Denselben Rhythmus.'],['sys','Nächste Station: Camden. 1996.']]
  },
  { index:1, chapter:'Kapitel I', title:'Camden – Die Mäuse-Invasion', caption:'Camden. 1996. They’re not fans. They’re thieves.', seed:9,
    fog:0x0b0c10, sky:0x6f84ad, rain:true, camDist:40, skyTop:'#05060a', skyHorizon:'#231a22',
    map:{w:54,h:54,ground:'cobble',neon:['CYBERDOG','THE GOOD MIXER','STABLES MARKET','KEBAB · CHIPS','RECORDS','TATTOO'],paint:(()=>{ const o=cityPaint(54,54,{street:11,seed:9,openChance:0.2}); clearArea(o,'cobble',16,16,12,12); clearArea(o,'dirt',31,19,5,5); clearArea(o,'dirt',12,31,5,5); clearArea(o,'asphalt',44,44,8,8); clearArea(o,'asphalt',2,2,8,8); return o; })(), signs:[{x:27,z:2,text:'CAMDEN MARKET',bg:'#2a1a1a'},{x:5,z:49,text:'THE GOOD MIXER',bg:'#1a2a1a'}]},
-   startKale:120, startRuf:0, build:['proberaum','heuturm','lager'], train:['maus','fan'], enemyActive:true, enemyCap:10,
+   startKale:160, startRuf:10, build:['proberaum','heuturm','lager'], train:['maus','fan'], enemyActive:true, enemyCap:12,
+   director:{start:90, every:55, base:2, grow:0.7, types:['bote','inspektor','makler'], from:[[47,44],[48,6]]},
    brief:[['sys','Camden, Nordlondon. Zu klein. Zu laut. Zu lebendig. Die Nachbarin hatte einen Topf auf dem Herd vergessen. Die Feuerwehr hinterließ Lücken.'],['sys','In der nächsten Nacht kamen die Mäuse.'],['theo','Wir haben Gesellschaft.'],['john','Das ist eine Maus.'],['theo','Das ist ein Fan.'],['john','Die will das Futter.'],['theo','Alle wollen was. Die wenigsten kommen wegen der Musik. Trotzdem zählen sie.']],
    objectives:[
      {text:'Einen Proberaum bauen (150 Grünkohl)', check:g=>g.hasBuilding('proberaum')},
@@ -1206,7 +1270,8 @@ const MISSIONS = [
  { index:3, chapter:'Kapitel III–IV', title:'Winter in Camden – Fucker Sucker', caption:'Die schwarzen Monate. Die Heizung gab an einem Dienstag den Geist auf.', seed:21, unlock:['fsucker'],
    fog:0x1a1d24, sky:0x9fb0d0, groundLight:0x5a6070, hemi:0.9, sun:0xcfd8ff, sunI:0.8, snow:true, fogNear:40, fogFar:130, camDist:42, skyTop:'#0a0c12', skyHorizon:'#2a2d36', starsOpacity:0.2,
    map:{w:58,h:58,ground:'snow',brick:0x3a2f2a,roof:0xdfe4ea,lit:0.7,neon:['CHIPPY','THE MONARCH','PAWN','LATE NIGHT'],paint:(()=>{ const o=cityPaint(58,58,{street:12,seed:21,openChance:0.2}); clearArea(o,'snow',8,38,12,12); clearArea(o,'dirt',22,44,4,4); clearArea(o,'dirt',6,28,4,4); clearArea(o,'asphalt',40,6,14,14); clearArea(o,'asphalt',26,10,8,8); return o; })()},
-   startKale:300, startRuf:40, enemyActive:true, enemyCap:16, spawnMul:1.2,
+   startKale:320, startRuf:40, enemyActive:true, enemyCap:16, spawnMul:1.2,
+   director:{start:70, every:50, base:3, grow:0.8, types:['bote','makler','inspektor'], from:[[44,16],[29,17]], bagger:4},
    brief:[['sys','Der Londoner Winter kam nicht wie ein Gast. Er kam wie ein Einzug. Die Heizung wurde einfach kälter, dann kalt, dann weg.'],['sys','Draußen ist es kalt: Wer sich weit von den eigenen Gebäuden entfernt, verliert langsam Kraft. In der Nähe erholt man sich.'],['theo','Hör auf.'],['john','Nein. Spiel ihn nochmal.'],['sys','So entstand der zweite Song. Fucker Sucker. Theo sagte, es sei eine Haltung. John sagte, es sei ein grammatikalisches Problem.'],['sys','Theo hat eine neue Fähigkeit: F. Das Bauamt sitzt im Nordosten. Reißt es ab.']],
    objectives:[ {text:'Das Bauamt abreißen', check:g=>!g.buildings.some(b=>b.type==='amt'&&b.alive)}, {text:'Beide Eigentumswohnungen abreißen', optional:true, check:g=>!g.buildings.some(b=>b.type==='condo'&&b.alive)} ],
    setup(g){ g.spawnBuilding('kaefig',1,13,43); g.spawnBuilding('proberaum',1,17,47); g.spawnBuilding('heuturm',1,10,38); g.spawnKale(23,45,350); g.spawnKale(7,29,350);
@@ -1223,7 +1288,8 @@ const MISSIONS = [
  { index:4, chapter:'Kapitel V', title:'Der Kale-Komplex', caption:'It was just kale. Nothing is ever just kale.', seed:33,
    fog:0x0a0c0a, sky:0x7f9cb0, hemi:0.6, rain:false, camDist:44, skyTop:'#05080a', skyHorizon:'#1c2a1e',
    map:{w:60,h:60,ground:'cobble',neon:['GREENGROCER','KALE','CAMDEN MARKET','INVERNESS ST'],paint:(()=>{ const o=cityPaint(60,60,{street:12,seed:33,openChance:0.35}); clearArea(o,'cobble',6,42,12,12); clearArea(o,'dirt',24,24,12,12); clearArea(o,'asphalt',44,6,12,12); clearArea(o,'asphalt',6,6,8,8); clearArea(o,'asphalt',46,44,8,8); return o; })(), signs:[{x:30,z:22,text:'GRÜNKOHL',fg:'#7fc45c',bg:'#102010'}]},
-   startKale:200, startRuf:30, enemyActive:true, enemyCap:18,
+   startKale:220, startRuf:30, enemyActive:true, enemyCap:18,
+   director:{start:60, every:48, base:3, grow:0.9, types:['makler','bote','inspektor'], from:[[47,22],[8,8]], boss:4, bagger:5},
    brief:[['sys','Jemand hatte Grünkohl stehen lassen. Er lag auf dem Küchentisch wie ein Objekt ohne Bedeutung. Bis er Bedeutung bekam.'],['theo','Wir brauchen mehr.'],['john','Wir haben genug.'],['theo','Das sagst du über alles.'],['john','Nicht beim Grünkohl. Beim Grünkohl stimmt es nie.'],['sys','Das große Feld liegt in der Mitte. Das Bauamt will es auch. Ein Grünkohl-Lager neben dem Feld verkürzt die Wege und zahlt Bonus.']],
    objectives:[ {text:'900 Grünkohl ernten', check:g=>(g.kaleTotal||0)>=900}, {text:'Alle Eigentumswohnungen abreißen', optional:true, check:g=>!g.buildings.some(b=>b.type==='condo'&&b.alive)} ],
    setup(g){ g.spawnBuilding('kaefig',1,11,47); g.spawnBuilding('proberaum',1,15,51); g.spawnKale(14,42,200); [[27,27],[31,27],[27,31],[31,31],[29,29]].forEach(p=>g.spawnKale(p[0],p[1],320));
@@ -1239,7 +1305,8 @@ const MISSIONS = [
  { index:5, chapter:'Kapitel VI', title:'Die Stadt, die sich selbst frisst', caption:'Camden. End of the 90s. The city didn’t throw them out. It just stopped knowing them.', seed:44,
    fog:0x0a0a0d, sky:0x6b7fa8, rain:true, camDist:44, spawnMul:0.9, skyTop:'#050509', skyHorizon:'#2a1c24',
    map:{w:62,h:62,ground:'cobble',neon:['TO LET','LUXURY LIVING','ESTATE AGENTS','SOLD','CAFÉ','COMING SOON'],paint:(()=>{ const o=cityPaint(62,62,{street:12,seed:44,openChance:0.3}); clearArea(o,'cobble',6,44,12,12); clearArea(o,'dirt',20,50,4,4); clearArea(o,'dirt',4,34,4,4); clearArea(o,'asphalt',40,4,18,18); clearArea(o,'asphalt',56,52,6,8); clearArea(o,'asphalt',24,28,8,8); return o; })(), signs:[{x:49,z:2,text:'LUXURY APARTMENTS · SOLD',fg:'#0a0a0a',bg:'#e6dfd0'}]},
-   startKale:320, startRuf:40, enemyActive:true, enemyCap:20,
+   startKale:340, startRuf:40, enemyActive:true, enemyCap:20,
+   director:{start:50, every:45, base:3, grow:1.0, types:['bote','makler','inspektor','bagger'], from:[[49,20],[30,34]], boss:3},
    brief:[['sys','London veränderte sich auf eine Art, die keine Meinung brauchte. Nur Arithmetik. Die Mieten stiegen. Die Venues schlossen.'],['theo','Wir suchen uns einen neuen Raum.'],['john','Es gibt keinen neuen Raum. Die Räume, die es noch gibt, werden nächstes Jahr auch Zettel haben.'],['theo','Dann kämpfen wir dagegen.'],['john','Wogegen? Gegen Geld? Gegen Grundstückspreise?'],['sys','Das Immobilien-Büro baut alle 50 Sekunden eine neue Eigentumswohnung. Reißt das Büro ab. Dann: der Van. München wartet.']],
    objectives:[ {text:'Das Immobilien-Büro abreißen', check:g=>!g.buildings.some(b=>b.type==='buero'&&b.alive), onDone:g=>{ g.flags.buero=true; g.say('sys','Irgendwann in diesen letzten Wochen verschwanden die Mäuse. Lautlos. Unangekündigt.'); g.units.filter(u=>u.type==='maus'&&u.team===1&&u.alive).forEach(u=>{ u.team=0; u.selected=false; u.ring.material.color.setHex(0x8a8580); u.orderMove(...g.world.toWorld(49,12)); }); g.selected=g.selected.filter(s=>s.team===1); UI.selectionChanged(); setTimeout(()=>{ if(game===g){ g.say('theo','Die Mäuse sind gentrifiziert worden.'); g.say('john','So könnte man es nennen.'); g.say('theo','Das ist das Traurigste, was ich je gehört habe.'); g.say('john','Oder das Konsequenteste.'); } },6000); }},
      {text:'John und Theo zum Van (Südosten)', check:g=>{ if(!g.flags.buero) return false; const v=g.buildings.find(b=>b.type==='van'); return v&&g.john&&g.john.alive&&g.theo&&g.theo.alive&&g.john.distTo(v)<3&&g.theo.distTo(v)<3; }} ],
@@ -1294,11 +1361,12 @@ const Flow = {
   hide(){ $('overlay').classList.add('off'); },
   menu(){ if(game){ UI.stop(); game.dispose(); game=null; } const prog=store.get('progress',0);
     this.overlay(`<div class="menu-hero">${img(1)}<div><div class="eyebrow">Two Cages, One Sound · Das Strategiespiel</div><h1>Camden <em>Command</em></h1><p style="margin-top:10px">Zwei Käfige. Zwei Welten. Ein Sound. Und ein Bauamt, das Zettel verteilt. Echtzeitstrategie durch alle Kapitel: Grünkohl ernten, Proberäume bauen, Räume halten, die Stadt überleben.</p></div></div>
-      <ul class="missions">${MISSIONS.map(m=>`<li><button ${m.index>prog?'disabled':''} data-m="${m.index}">${img(BRIEF_IMG[m.index],'thumb')}<span><span class="t">${m.index+1} · ${m.title}</span><br><span class="s">${m.chapter}</span></span><span class="st ${m.index<prog?'done':''}">${m.index<prog?'gespielt':m.index===prog?'offen':'gesperrt'}</span></button></li>`).join('')}</ul>
-      <div class="row" style="margin-top:18px"><button class="btn ghost" id="m-help">Steuerung</button>${prog>0?'<button class="btn ghost" id="m-reset">Fortschritt löschen</button>':''}<a class="btn ghost" href="https://chefcat-2026.github.io/two-cages-one-sound/">Zum Buch</a></div>
+      <ul class="missions">${MISSIONS.map(m=>`<li><button ${m.index>prog?'disabled':''} data-m="${m.index}" ${m.index===prog?'autofocus':''}>${img(BRIEF_IMG[m.index],'thumb')}<span><span class="t">${m.index+1} · ${m.title}</span><br><span class="s">${m.chapter}</span></span><span class="st ${m.index<prog?'done':''}">${m.index<prog?'gespielt':m.index===prog?'offen':'gesperrt'}</span></button></li>`).join('')}</ul>
+      <div class="row" style="margin-top:18px"><span class="diff" id="m-diff">${['leicht','normal','hart'].map(d=>`<button data-d="${d}" class="${store.get('diff','normal')===d?'active':''}">${d}</button>`).join('')}</span><button class="btn ghost" id="m-help">Steuerung</button>${prog>0?'<button class="btn ghost" id="m-reset">Fortschritt löschen</button>':''}<a class="btn ghost" href="https://chefcat-2026.github.io/two-cages-one-sound/">Zum Buch</a></div>
       <p class="footnote">Der Schalter „Tusche“ oben rechts rendert das Spiel schwarz-weiß-rot wie die Illustrationen. Nach dem Roman von U. Rinner. Läuft im Browser, am besten mit Maus und Tastatur. Am Handy: Tippen wählt, langes Tippen oder Tippen auf freien Boden schickt los, Ziehen bewegt die Kamera, zwei Finger zoomen.</p>`);
     document.querySelectorAll('.missions button').forEach(b=>b.onclick=()=>this.briefing(MISSIONS[+b.dataset.m]));
     document.querySelectorAll('.missions button').forEach(b=>b.onclick=()=>this.briefing(MISSIONS[+b.dataset.m]));
+    document.querySelectorAll('#m-diff button').forEach(b=>b.onclick=()=>{ store.set('diff',b.dataset.d); document.querySelectorAll('#m-diff button').forEach(x=>x.classList.toggle('active',x===b)); });
     $('m-help').onclick=()=>this.help(false); const r=$('m-reset'); if(r) r.onclick=()=>{ store.set('progress',0); store.set('abilities',{}); this.menu(); };
   },
   briefing(m){ this.current=m; const obj=m.objectives.map(o=>`<li>${typeof o.text==='function'?o.text({}):o.text}${o.optional?' (optional)':''}</li>`).join('');
@@ -1308,11 +1376,12 @@ const Flow = {
     $('b-start').onclick=()=>this.start(m); $('b-back').onclick=()=>this.menu();
   },
   name(w){ return {theo:'Theo',john:'John',sys:'',cat:'Smokey',bauamt:'Das Bauamt',adriana:'Adriana',susanna:'Susanna',bounty:'Bounty'}[w]||''; },
-  start(m){ if(game){ UI.stop(); game.dispose(); game=null; } Audio.init(); Input.attackMode=false; Input.groups={}; game=new Game(m); game.kaleTotal=0; const addK=game.addKale.bind(game); game.addKale=n=>{ addK(n); game.kaleTotal+=n; }; UI.start(); this.hide(); if(Audio.on) Audio.startRain(); },
+  start(m){ if(game){ UI.stop(); game.dispose(); game=null; } Audio.init(); Audio.ensure(); Input.attackMode=false; Input.groups={}; game=new Game(m); game.kaleTotal=0; const addK=game.addKale.bind(game); game.addKale=n=>{ addK(n); game.kaleTotal+=n; }; UI.start(); this.hide(); if(Audio.on) Audio.startRain(); },
   debrief(m, won){ UI.stop(); const lines = won ? m.outro : [['sys', game.loseText||'Die Band ist am Ende.']]; const last = won && m.index===MISSIONS.length-1;
     this.overlay(`<div class="eyebrow">${won?'Mission erfüllt':'Mission gescheitert'} · ${m.title}</div><h2>${won?(last?'Das Ende, das keines war':'Weiter.'):'Nochmal.'}</h2>
       <div class="scene">${img(won?DEBRIEF_IMG[m.index]:BRIEF_IMG[m.index])}</div>
       <div class="brief" style="margin-top:14px"><div class="lines">${lines.map(([w,l])=>`<div><b class="${w}">${this.name(w)}</b>${l}</div>`).join('')}</div></div>
+      <div class="stats"><div><b>${game.stats.kills}</b><span>Bauamt abgewehrt</span></div><div><b>${game.stats.zettelOff}/${game.stats.zettelOn}</b><span>Zettel abgerissen</span></div><div><b>${game.stats.waves}</b><span>Wellen</span></div><div><b>${game.stats.lost}</b><span>Gebäude verloren</span></div><div><b>${Math.floor(game.time/60)}:${String(Math.floor(game.time%60)).padStart(2,'0')}</b><span>Spielzeit</span></div><div><b>${(game.john&&game.john.level||0)}★ / ${(game.theo&&game.theo.level||0)}★</b><span>John / Theo</span></div></div>
       <div class="row" style="margin-top:18px">${won&&!last?'<button class="btn solid" id="d-next">Nächste Mission</button>':''}<button class="btn ${won?'ghost':'solid'}" id="d-again">${won?'Nochmal spielen':'Nochmal versuchen'}</button><button class="btn ghost" id="d-menu">Menü</button></div>
       ${last?'<p class="footnote">Born in Borehamwood. Died in Basel. Lived everywhere in between. · <a href="https://chefcat-2026.github.io/two-cages-one-sound/">Das Buch</a></p>':''}`);
     const n=$('d-next'); if(n) n.onclick=()=>this.briefing(MISSIONS[m.index+1]); $('d-again').onclick=()=>this.briefing(m); $('d-menu').onclick=()=>this.menu();
