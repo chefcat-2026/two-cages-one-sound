@@ -270,6 +270,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { GammaCorrectionShader } from 'three/addons/shaders/GammaCorrectionShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 /* =====================================================================
    CAMDEN COMMAND — Echtzeitstrategie zu "Two Cages, One Sound" (U. Rinner)
    Ein einzelnes HTML. Three.js für die 3D-Szene, alles andere von Hand.
@@ -519,6 +520,7 @@ const Tex = {
     else if(t==='dirt'){ fill('#4a3b2a'); this.speck(g,x0,y0,S,2000,0.28,3); for(let i=0;i<40;i++){ g.fillStyle='rgba(120,100,80,.35)'; g.beginPath(); g.ellipse(x0+Math.random()*S,y0+Math.random()*S,2+Math.random()*4,1.5+Math.random()*3,Math.random()*3,0,7); g.fill(); } }
     else if(t==='water'){ fill('#15283a'); g.strokeStyle='rgba(120,170,210,.25)'; g.lineWidth=1.5; for(let i=0;i<26;i++){ const x=x0+Math.random()*S,y=y0+Math.random()*S; g.beginPath(); g.ellipse(x,y,10+Math.random()*25,2+Math.random()*4,0,0,7); g.stroke(); } }
     else if(t==='dry'){ fill('#7a6a3e'); this.speck(g,x0,y0,S,2400,0.22,3); g.strokeStyle='rgba(60,45,20,.55)'; g.lineWidth=1.2; for(let i=0;i<10;i++){ g.beginPath(); let x=x0+Math.random()*S,y=y0+Math.random()*S; g.moveTo(x,y); for(let k=0;k<6;k++){ x+=(Math.random()-0.5)*50; y+=(Math.random()-0.5)*50; g.lineTo(x,y);} g.stroke(); } }
+    else if(t==='pavement'){ fill('#54524c'); this.speck(g,x0,y0,S,1200,0.14,2); g.fillStyle='rgba(0,0,0,.4)'; for(let k=0;k<=S;k+=S/4){ g.fillRect(x0,y0+k-1,S,2); g.fillRect(x0+k-1,y0,2,S); } }
     else if(t==='snow'){ fill('#cfd5dd'); this.speck(g,x0,y0,S,1500,0.12,3); g.fillStyle='rgba(90,100,115,.35)'; for(let i=0;i<30;i++){ g.beginPath(); g.ellipse(x0+Math.random()*S,y0+Math.random()*S,3,5,Math.random()*3,0,7); g.fill(); } g.fillStyle='rgba(60,70,80,.25)'; for(let i=0;i<6;i++) g.fillRect(x0+Math.random()*S,y0+Math.random()*S,20+Math.random()*60,2); }
     else if(t==='concrete'){ fill('#45453f'); this.speck(g,x0,y0,S,1600,0.14,2); g.fillStyle='rgba(0,0,0,.45)'; g.fillRect(x0,y0+S/2-1,S,2); g.fillRect(x0+S/2-1,y0,2,S); }
     else fill('#111111');
@@ -528,7 +530,7 @@ const Tex = {
     const lum=(x,y)=>{ x=(x+w)%w; y=(y+h)%h; const i=(y*w+x)*4; return (src[i]*0.299+src[i+1]*0.587+src[i+2]*0.114)/255; };
     for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const dx=(lum(x+1,y)-lum(x-1,y))*strength, dy=(lum(x,y+1)-lum(x,y-1))*strength; const l=Math.hypot(dx,dy,1); const i=(y*w+x)*4; d[i]=((-dx/l)*0.5+0.5)*255; d[i+1]=((-dy/l)*0.5+0.5)*255; d[i+2]=(1/l)*0.5*255+127; d[i+3]=255; }
     g.putImageData(img,0,0); const t=new THREE.CanvasTexture(out); t.anisotropy=8; return t; },
-  atlas(){ if(this._atlas) return this._atlas; const S=256; this.types=['asphalt','cobble','grass','dirt','water','dry','concrete','snow']; const c=this.canvas(S*4,S*2); const g=c.getContext('2d');
+  atlas(){ if(this._atlas) return this._atlas; const S=256; this.types=['asphalt','cobble','grass','dirt','water','dry','concrete','snow','pavement']; const c=this.canvas(S*4,S*2); const g=c.getContext('2d');
     this.types.forEach((t,i)=>{ g.save(); g.beginPath(); g.rect((i%4)*S,Math.floor(i/4)*S,S,S); g.clip(); this.tile(t,g,(i%4)*S,Math.floor(i/4)*S,S); g.restore(); });
     const t=this.tex(c); t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping; this._atlas=t; this._atlasN=this.normalFrom(c, 1.6); this._atlasN.wrapS=this._atlasN.wrapT=THREE.ClampToEdgeWrapping; return t; },
   facade(wc, ht, brick, opts={}){ // Hausfassade: Ziegel, Fenster (teils erleuchtet), Tür, Dreck. Liefert Farb- und Leuchtkarte.
@@ -620,6 +622,38 @@ const Models = {
     return g;
   }
 };
+/* ---------- Assets: gebackene PBR-Texturen und das Camden-Set aus Blender ---------- */
+const Assets = {
+  ready:false, set:null, tex:{}, mcache:new Map(), tiles:{},
+  async load(){
+    if(this.ready) return; const tl=new THREE.TextureLoader();
+    const ld=(n)=>new Promise(res=>tl.load(IMG+'tex/'+n+'.jpg', t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; res(t); }, undefined, ()=>res(null)));
+    const names=['brick_london','brick_red','brick_dark','slate','asphalt','pavement','cobble','render','woodgreen'];
+    const all=await Promise.all(names.flatMap(n=>[ld(n+'_col'),ld(n+'_nrm'),ld(n+'_rgh')]));
+    names.forEach((n,i)=>{ const c=all[i*3], nm=all[i*3+1], r=all[i*3+2]; if(c){ c.colorSpace=THREE.SRGBColorSpace; this.tex[n]={map:c,normalMap:nm,roughnessMap:r}; } });
+    const gltf=await new Promise(res=>new GLTFLoader().load(IMG+'set/camden.json', g=>res(g), undefined, e=>{ console.warn('Camden-Set nicht geladen:', e); res(null); }));
+    if(gltf){ this.set={}; gltf.scene.traverse(o=>{ if(o.isMesh){ const root=(o.parent && o.parent!==gltf.scene)? o.parent : o; const name=root.name.replace(/_\d+$/,''); (this.set[name]=this.set[name]||[]).push({geo:o.geometry, matName:(o.material&&o.material.name)||'paint'}); } }); }
+    this.ready=true;
+  },
+  pbr(n, extra={}){ const t=this.tex[n]; if(!t) return new THREE.MeshStandardMaterial(Object.assign({color:0x888888, roughness:0.9}, extra)); return new THREE.MeshStandardMaterial(Object.assign({map:t.map, normalMap:t.normalMap, roughnessMap:t.roughnessMap, normalScale:new THREE.Vector2(1.4,1.4), roughness:1, metalness:0, envMapIntensity:0.12}, extra)); },
+  material(name, brick='brick_london'){ const key=name+'|'+brick; if(this.mcache.has(key)) return this.mcache.get(key); let m;
+    switch(name){
+      case 'brick': m=this.pbr(brick); break; case 'slate': m=this.pbr('slate',{color:0xe0e4ec, envMapIntensity:0.35}); break; case 'clay': m=new THREE.MeshStandardMaterial({color:0x8a4a30, roughness:0.85}); break; case 'render': m=this.pbr('render',{color:0xffffff}); break; case 'wood': m=this.pbr('woodgreen'); break;
+      case 'pavement': m=this.pbr('pavement'); break; case 'asphalt': m=this.pbr('asphalt',{envMapIntensity:0.3}); break;
+      case 'glass': m=new THREE.MeshPhysicalMaterial({color:0x151c26, roughness:0.08, metalness:0.1, envMapIntensity:1.0, clearcoat:0.6}); break;
+      case 'frame': m=new THREE.MeshStandardMaterial({color:0xe6e2d8, roughness:0.5}); break; case 'stone': m=new THREE.MeshStandardMaterial({color:0xbdb5a4, roughness:0.85}); break;
+      case 'door': m=new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.45}); break; case 'paint': m=new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.35, metalness:0.15, envMapIntensity:0.6}); break;
+      case 'metal': m=new THREE.MeshStandardMaterial({color:0x111214, roughness:0.5, metalness:0.6, envMapIntensity:0.4}); break; case 'rubber': m=new THREE.MeshStandardMaterial({color:0x0b0b0b, roughness:0.9}); break;
+      case 'lamp': m=new THREE.MeshStandardMaterial({color:0xffe6b0, emissive:0xffd9a0, emissiveIntensity:2.5, toneMapped:false}); break; case 'red': m=new THREE.MeshStandardMaterial({color:0x9c1016, roughness:0.4, metalness:0.1, envMapIntensity:0.5}); break;
+      case 'leaf': m=new THREE.MeshStandardMaterial({color:0x3d5c2c, roughness:0.9}); break; case 'bark': m=new THREE.MeshStandardMaterial({color:0x4a4034, roughness:0.95}); break; case 'canvas': m=new THREE.MeshStandardMaterial({color:0xb7ae9a, roughness:0.95}); break;
+      default: m=new THREE.MeshStandardMaterial({color:0x999999, roughness:0.8});
+    }
+    this.mcache.set(key,m); return m; },
+  tile(type){ // Kacheltextur für Bodenarten ohne gebackenes Material (Gras, Erde, Schnee ...)
+    if(this.tiles[type]) return this.tiles[type]; const c=Tex.canvas(256,256); const g=c.getContext('2d'); Tex.tile(type,g,0,0,256); const t=Tex.tex(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; const n=Tex.normalFrom(c,1.4); n.wrapS=n.wrapT=THREE.RepeatWrapping; this.tiles[type]={map:t,normalMap:n}; return this.tiles[type]; }
+};
+const INSTANCE_COLORS = { door:[0x1b2a4a,0x5a1a1a,0x1f3a2a,0x111111,0x6a4a1a,0x2a2a3a,0xa33a3a,0x3a5a7a], paint:[0x1a2238,0x8a8c90,0x101010,0x5a1515,0xd9d6cc,0x2d4a3e,0x3a3a3a], render:[0xe8e2d6,0xd9c9b0,0xc9d2d6,0xe2d2c2,0xd0c8c0], canvas:[0xb7ae9a,0x9c1016,0x1b3a5a,0xd9d6cc] };
+
 /* ---------- Figuren aus Blender (img/models.bin + models.json) ---------- */
 const Models3D = {
   data:null, cache:{}, mat:new THREE.MeshPhysicalMaterial({vertexColors:true, roughness:0.72, metalness:0.0, sheen:0.55, sheenRoughness:0.7, sheenColor:new THREE.Color(0xffffff), envMapIntensity:0.3}),
@@ -708,7 +742,7 @@ function buildBuildingModel(type, team){
 }
 /* ---------- Welt: Raster, Terrain, Props ---------- */
 const TERRAIN = { // Farben pro Zellentyp
-  asphalt:[0x1e1d1b, 0x211f1d], cobble:[0x363028, 0x3a342c], grass:[0x2d4a26, 0x304d29], dirt:[0x4a3b2a, 0x4e3e2c], water:[0x15283a, 0x172b3e], block:[0x111111,0x111111], dry:[0x7a6a3e, 0x7e6e42], concrete:[0x44443f, 0x474742], snow:[0xd8dde4, 0xd0d6de]
+  pavement:[0x5a5852, 0x5d5b55], asphalt:[0x1e1d1b, 0x211f1d], cobble:[0x363028, 0x3a342c], grass:[0x2d4a26, 0x304d29], dirt:[0x4a3b2a, 0x4e3e2c], water:[0x15283a, 0x172b3e], block:[0x111111,0x111111], dry:[0x7a6a3e, 0x7e6e42], concrete:[0x44443f, 0x474742], snow:[0xd8dde4, 0xd0d6de]
 };
 class World {
   constructor(spec){
@@ -716,9 +750,11 @@ class World {
     this.type = new Array(n).fill(spec.ground||'grass'); this.blocked=new Uint8Array(n); this.bld=new Array(n).fill(null);
     this.group = new THREE.Group(); scene.add(this.group); this.props=[];
     (spec.paint||[]).forEach(p=>this.paint(p));
+    if(spec.set){ for(let cz=0;cz<this.H;cz++) for(let cx=0;cx<this.W;cx++){ const i=this.idx(cx,cz); if(this.type[i]==='asphalt' && this.near(cx,cz,'block',1)) this.type[i]='pavement'; } }
     for(let i=0;i<n;i++){ if(this.type[i]==='water'||this.type[i]==='block') this.blocked[i]=1; }
-    this.buildGround(); this.buildProps(spec);
+    if(spec.set && Assets.set) { this.buildGroundTextured(spec); this.buildSet(spec); } else { this.buildGround(); this.buildProps(spec); }
   }
+  heightAt(x,z){ const [cx,cz]=this.toCell(x,z); return (this.inb(cx,cz) && this.type[this.idx(cx,cz)]==='pavement') ? 0.12 : 0; }
   idx(cx,cz){ return cz*this.W+cx; }
   inb(cx,cz){ return cx>=0&&cz>=0&&cx<this.W&&cz<this.H; }
   toWorld(cx,cz){ return [ (cx-this.W/2+0.5)*CELL, (cz-this.H/2+0.5)*CELL ]; }
@@ -726,6 +762,76 @@ class World {
   paint(p){ // {t:'asphalt', x,z,w,h} oder {t, x1,z1,x2,z2,w:breite} Straße
     if (p.x1!==undefined){ const steps=Math.max(Math.abs(p.x2-p.x1),Math.abs(p.z2-p.z1)); for(let s=0;s<=steps;s++){ const cx=Math.round(lerp(p.x1,p.x2,s/steps)), cz=Math.round(lerp(p.z1,p.z2,s/steps)); const r=Math.floor((p.w||3)/2); for(let dx=-r;dx<=r;dx++) for(let dz=-r;dz<=r;dz++){ if(this.inb(cx+dx,cz+dz)) this.type[this.idx(cx+dx,cz+dz)]=p.t; } } }
     else { for(let cx=p.x;cx<p.x+p.w;cx++) for(let cz=p.z;cz<p.z+p.h;cz++){ if(this.inb(cx,cz)) this.type[this.idx(cx,cz)]=p.t; } }
+  }
+  buildGroundTextured(spec){ // eine Geometrie je Bodenart, UV in Weltmaßen (1 Kachel = 2 m), Gehwege 12 cm erhöht mit Bordstein
+    const byType={}; const push=(t,arr)=>{ (byType[t]=byType[t]||[]).push(...arr); };
+    const H_PAV=0.12; const yOf=(t)=> t==='pavement'?H_PAV : t==='water'?-0.25 : 0;
+    for(let cz=0;cz<this.H;cz++) for(let cx=0;cx<this.W;cx++){
+      const t=this.type[this.idx(cx,cz)]; const x0=(cx-this.W/2)*CELL, z0=(cz-this.H/2)*CELL, x1=x0+CELL, z1=z0+CELL; const y=yOf(t);
+      push(t, [x0,y,z0, x0,y,z1, x1,y,z1,  x0,y,z0, x1,y,z1, x1,y,z0]);
+      if(t==='pavement'){ // Bordsteine zu niedrigeren Nachbarn
+        const nb=[[cx,cz-1, x0,z0,x1,z0],[cx+1,cz, x1,z0,x1,z1],[cx,cz+1, x1,z1,x0,z1],[cx-1,cz, x0,z1,x0,z0]];
+        for(const [nx,nz, ax,az,bx,bz] of nb){ if(!this.inb(nx,nz)) continue; const nt=this.type[this.idx(nx,nz)]; if(nt==='pavement'||nt==='block') continue; const yl=yOf(nt); push('kerb',[ax,y,az, ax,yl,az, bx,yl,bz,  ax,y,az, bx,yl,bz, bx,y,bz]); }
+      }
+    }
+    for(const t in byType){ const pos=new Float32Array(byType[t]); const n=pos.length/3; const uv=new Float32Array(n*2); for(let i=0;i<n;i++){ uv[i*2]=pos[i*3]/2; uv[i*2+1]=pos[i*3+2]/2; if(t==='kerb'){ uv[i*2+1]=pos[i*3+1]*2; } }
+      const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(pos,3)); geo.setAttribute('uv',new THREE.BufferAttribute(uv,2)); geo.computeVertexNormals();
+      let m; if(t==='asphalt') m=Assets.material('asphalt'); else if(t==='pavement'||t==='kerb') m=Assets.material('pavement'); else if(t==='cobble') m=Assets.pbr('cobble'); else if(t==='block') m=new THREE.MeshStandardMaterial({color:0x151310, roughness:1}); else { const tt=Assets.tile(t); m=new THREE.MeshStandardMaterial({map:tt.map, normalMap:tt.normalMap, normalScale:new THREE.Vector2(0.6,0.6), roughness:t==='water'?0.1:0.95, metalness:t==='water'?0.3:0, envMapIntensity:t==='water'?0.8:0.1}); }
+      const mesh_=new THREE.Mesh(geo,m); mesh_.receiveShadow=true; this.group.add(mesh_); if(t==='asphalt') this.ground=mesh_; }
+    if(!this.ground) this.ground=this.group.children[0];
+    const rim=mesh(GEO.plane, new THREE.MeshBasicMaterial({color:0x050505}), this.W*CELL*4, this.H*CELL*4, 1, 0,-0.6,0,false); rim.rotation.x=-Math.PI/2; this.group.add(rim);
+    // Mittelstreifen auf Straßen: gestrichelt, nur auf der mittleren Spur
+    const dash=[]; for(let cz=0;cz<this.H;cz++) for(let cx=0;cx<this.W;cx++){ if(this.type[this.idx(cx,cz)]!=='asphalt') continue; const [x,z]=this.toWorld(cx,cz); const up=this.inb(cx,cz-1)&&this.type[this.idx(cx,cz-1)]==='asphalt', dn=this.inb(cx,cz+1)&&this.type[this.idx(cx,cz+1)]==='asphalt', lf=this.inb(cx-1,cz)&&this.type[this.idx(cx-1,cz)]==='asphalt', rt=this.inb(cx+1,cz)&&this.type[this.idx(cx+1,cz)]==='asphalt';
+      const lp=this.inb(cx-1,cz)&&this.type[this.idx(cx-1,cz)]==='pavement', rp=this.inb(cx+1,cz)&&this.type[this.idx(cx+1,cz)]==='pavement', upv=this.inb(cx,cz-1)&&this.type[this.idx(cx,cz-1)]==='pavement', dnp=this.inb(cx,cz+1)&&this.type[this.idx(cx,cz+1)]==='pavement';
+      if(lp&&rp&&up&&dn&&!(upv||dnp)){ dash.push(part(GEO.box,0xd8d6cc, 0.12,0.01,1.1, x,0.012,z)); } else if(upv&&dnp&&lf&&rt&&!(lp||rp)){ dash.push(part(GEO.box,0xd8d6cc, 1.1,0.01,0.12, x,0.012,z)); } }
+    if(dash.length){ this.group.add(new THREE.Mesh(mergeParts(dash), new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.6}))); }
+  }
+  buildSet(spec){ // Camden-Set: Häuser als Instanzen, Straßenmöbel, Bäume
+    const inst={}; const place=(piece,x,z,rotY,opts={})=>{ if(!Assets.set[piece]) return; const key=piece+'|'+(opts.brick||''); (inst[key]=inst[key]||{piece,brick:opts.brick||'brick_london',list:[]}).list.push({x,z,rotY,color:opts.color,scale:opts.scale||1}); };
+    const houses=(spec.paint&&spec.paint.houses)||[]; this.lamps=[]; const pal=spec.palette||['brick_london','brick_london','brick_red','brick_dark'];
+    let hi=0;
+    for(const h of houses){ // nur wo die Zellen noch Block sind (Basisflächen wurden freigeräumt)
+      if(!h.cells.every(([cx,cz])=>this.inb(cx,cz)&&this.type[this.idx(cx,cz)]==='block')) continue;
+      const [x,z]=this.toWorld(h.cx,h.cz); // Slotmitte (2x2 Zellen)
+      const brick=pal[h.block%pal.length]; const variant = h.corner? (h.shop?'house_cornershop':'house_corner') : h.shop? 'house_shop' : (h.rnd<0.4?'house_bay': h.rnd<0.7?'house_plain': h.rnd<0.85?'house_plain2':'house_flat');
+      // Front-Mittelpunkt: Slotmitte um eine halbe Slottiefe in Blickrichtung verschoben
+      const px=x + h.dx*CELL, pz=z + h.dz*CELL; const rotY=Math.atan2(h.dx,h.dz);
+      place(variant, px, pz, rotY, {brick, color: INSTANCE_COLORS.door[(hi*7+h.block)%INSTANCE_COLORS.door.length]}); hi++;
+      // Gehwegmöbel vor dem Haus: Geländer bei Wohnhäusern, Mülltonne, gelegentlich Laterne
+      const ox=h.dx, oz=h.dz; const sx=-oz, sz=ox; // sx/sz: entlang der Front
+      if(!h.shop && srand()<0.7){ place('railing', px+ox*1.0+sx*1.0, pz+oz*1.0+sz*1.0, rotY); }
+      if(srand()<0.25){ place('wheelie_bin', px+ox*0.9-sx*1.6, pz+oz*0.9-sz*1.6, rotY+srand()*0.6, {color:[0x2a3a2a,0x1a1a1a,0x3a3a5a][Math.floor(srand()*3)]}); }
+      if(h.lamp){ const lx=px+ox*1.75+sx*1.6, lz=pz+oz*1.75+sz*1.6; place('lamp_post', lx, lz, rotY); this.lamps.push({x:lx,z:lz}); }
+      if(h.shop && srand()<0.5){ place('market_stall', px+ox*2.6-sx*0.4, pz+oz*2.6-sz*0.4, rotY+Math.PI, {color:INSTANCE_COLORS.canvas[Math.floor(srand()*4)]}); }
+    }
+    // Parkende Autos entlang der Bordsteine, Bus, Telefonzelle, Briefkasten, Poller an Gassen
+    for(let cz=1;cz<this.H-1;cz++) for(let cx=1;cx<this.W-1;cx++){ const i=this.idx(cx,cz); if(this.type[i]!=='asphalt') continue;
+      const [x,z]=this.toWorld(cx,cz); const L=this.type[this.idx(cx-1,cz)]==='pavement', R=this.type[this.idx(cx+1,cz)]==='pavement', U=this.type[this.idx(cx,cz-1)]==='pavement', D=this.type[this.idx(cx,cz+1)]==='pavement';
+      if((L||R) && !(U||D) && (cz%3===1) && srand()<0.32){ const side=L?-1:1; place(srand()<0.2?'cab':'car', x+side*0.65, z, Math.PI/2*(side<0?1:-1)*(srand()<0.5?1:-1), {color: srand()<0.2?0x111111: INSTANCE_COLORS.paint[Math.floor(srand()*INSTANCE_COLORS.paint.length)]}); }
+      else if((U||D) && !(L||R) && (cx%3===1) && srand()<0.32){ const side=U?-1:1; place(srand()<0.2?'cab':'car', x, z+side*0.65, (side<0?0:Math.PI)+(srand()<0.5?0:Math.PI), {color: srand()<0.2?0x111111: INSTANCE_COLORS.paint[Math.floor(srand()*INSTANCE_COLORS.paint.length)]}); }
+    }
+    (spec.buses||[]).forEach(b=>{ const [x,z]=this.toWorld(b[0],b[1]); place('bus', x, z, b[2]||0); });
+    let corners=0; for(let cz=1;cz<this.H-1;cz++) for(let cx=1;cx<this.W-1;cx++){ const i=this.idx(cx,cz); if(this.type[i]!=='pavement') continue; const [x,z]=this.toWorld(cx,cz);
+      const ap=(dx,dz)=>this.type[this.idx(cx+dx,cz+dz)]==='asphalt'; const corner=(ap(1,0)&&ap(0,1))||(ap(-1,0)&&ap(0,1))||(ap(1,0)&&ap(0,-1))||(ap(-1,0)&&ap(0,-1));
+      if(corner){ corners++; if(corners%9===2) place('phone_box', x, z, srand()*Math.PI*2); else if(corners%9===5) place('pillar_box', x, z, 0); else if(corners%9===7) place('bench', x, z, srand()*Math.PI*2); }
+      const bl=(dx,dz)=>this.inb(cx+dx,cz+dz)&&this.type[this.idx(cx+dx,cz+dz)]==='block'; const alley=(bl(1,0)&&bl(-1,0)&&!bl(0,1)&&!bl(0,-1))||(bl(0,1)&&bl(0,-1)&&!bl(1,0)&&!bl(-1,0));
+      if(alley && srand()<0.5) place('bollard', x+(srand()-0.5), z+(srand()-0.5), 0);
+    }
+    // Bäume und Bänke auf Grün und Plätzen
+    for(let cz=1;cz<this.H-1;cz++) for(let cx=1;cx<this.W-1;cx++){ const t=this.type[this.idx(cx,cz)]; const [x,z]=this.toWorld(cx,cz);
+      if(t==='grass' && srand()<(spec.treeDensity||0.05)*1.4 && !this.near(cx,cz,'block',1)) place('plane_tree', x+(srand()-0.5), z+(srand()-0.5), srand()*6.28, {scale:0.75+srand()*0.6});
+      if(t==='cobble' && !this.near(cx,cz,'block',2) && srand()<0.012) place('plane_tree', x, z, srand()*6.28, {scale:0.7+srand()*0.4});
+    }
+    // Instanzen bauen
+    const M=new THREE.Matrix4(), P=new THREE.Vector3(), Q=new THREE.Quaternion(), S=new THREE.Vector3(), C=new THREE.Color();
+    for(const key in inst){ const g=inst[key]; const prims=Assets.set[g.piece]; if(!prims) continue;
+      for(const pr of prims){ const m=Assets.material(pr.matName, g.brick); const im=new THREE.InstancedMesh(pr.geo, m, g.list.length); im.castShadow=true; im.receiveShadow=true; const colored=!!INSTANCE_COLORS[pr.matName];
+        g.list.forEach((e,i)=>{ P.set(e.x,0,e.z); Q.setFromAxisAngle(new THREE.Vector3(0,1,0), e.rotY); S.setScalar(e.scale); M.compose(P,Q,S); im.setMatrixAt(i,M); if(colored){ C.setHex(e.color!==undefined? e.color : INSTANCE_COLORS[pr.matName][i%INSTANCE_COLORS[pr.matName].length]); im.setColorAt(i,C); } });
+        im.instanceMatrix.needsUpdate=true; if(im.instanceColor) im.instanceColor.needsUpdate=true; this.group.add(im); }
+    }
+    // Lichtkegel unter Laternen
+    const pools=this.lamps.map(l=>part(GEO_CIRCLE,0xffe9b0, 2.4,2.4,1, l.x,0.14,l.z,-Math.PI/2,0,0)); if(pools.length){ this.group.add(new THREE.Mesh(mergeParts(pools), new THREE.MeshBasicMaterial({map:Tex.glow(), vertexColors:true, transparent:true, opacity:0.45, blending:THREE.AdditiveBlending, depthWrite:false}))); }
+    (spec.signs||[]).forEach(s_=>{ const [x,z]=this.toWorld(s_.x,s_.z); const m=mesh(GEO.plane, makeSign(s_.text, 384,64, s_.fg||'#f2ede4', s_.bg||'#141210'), 5,0.85,1, x, s_.y||2.6, z, false); m.rotation.y=s_.rot||0; this.group.add(m); });
   }
   buildGround(){
     const n=this.W*this.H; const pos=new Float32Array(n*18), col=new Float32Array(n*18), uv=new Float32Array(n*12); const c=new THREE.Color(); let k=0, ku=0; const atlas=Tex.atlas(); const pad=3/1024;
@@ -904,7 +1010,7 @@ class Unit extends Entity {
   sync(dt, moving){
     const m=this.mesh; m.position.x=this.x; m.position.z=this.z; let a=this.facing-m.rotation.y; a=Math.atan2(Math.sin(a),Math.cos(a)); m.rotation.y+=a*Math.min(1,dt*14);
     const quad = this.def.model!=='man' && this.def.model!=='bagger';
-    this.bob+=dt*(moving?(quad?16:12):3); const hop=moving? Math.abs(Math.sin(this.bob))*(quad?0.1:0.05) : 0; m.position.y = hop;
+    this.bob+=dt*(moving?(quad?16:12):3); const hop=moving? Math.abs(Math.sin(this.bob))*(quad?0.1:0.05) : 0; m.position.y = hop + (game&&game.world.heightAt? game.world.heightAt(this.x,this.z):0);
     const inner=m.children[0]; if(inner && inner.isMesh){ inner.rotation.z = moving? Math.sin(this.bob)*(quad?0.09:0.04) : 0; inner.rotation.x = moving? -0.06 - Math.max(0,Math.sin(this.bob*2))*0.03 : 0; }
     if(this.lungeT>0){ this.lungeT-=dt; const k=Math.sin(Math.max(0,this.lungeT)/0.18*Math.PI)*0.35; m.position.x+=Math.sin(this.facing)*k; m.position.z+=Math.cos(this.facing)*k; }
     if(this.popT>0){ this.popT-=dt; const k=1+Math.max(0,this.popT)*1.4; m.scale.set(k,1/k,k); } else if(!this.dead) m.scale.set(1,1,1); if(this.stun>0) m.rotation.z=Math.sin(this.bob*2)*0.1; else m.rotation.z=0;
@@ -1262,13 +1368,42 @@ function cityPaint(W,H,opt={}){ // Straßenraster mit Häuserblöcken und Innenh
   return ops;
 }
 function clearArea(ops,t,x,z,w,h){ ops.push({t,x,z,w,h}); return ops; }
+function cityPaint2(W,H,opt={}){ // Straßenraster; Blöcke mit zwei Zellen tiefen Reihenhaus-Ringen, Gassen, Innenhöfen; liefert Haus-Slots mit
+  const ops=[]; ops.houses=[]; const s=opt.street||14; const sw=opt.sw||3; seed=opt.seed||3;
+  for(let x=s;x<W-2;x+=s) ops.push({t:'asphalt',x1:x,z1:0,x2:x,z2:H-1,w:sw});
+  for(let z=s;z<H-2;z+=s) ops.push({t:'asphalt',x1:0,z1:z,x2:W-1,z2:z,w:sw});
+  const r=Math.floor(sw/2); let block=0;
+  for(let bx=0;bx<W;bx+=s) for(let bz=0;bz<H;bz+=s){
+    const x0=bx===0?0:bx+r+1, z0=bz===0?0:bz+r+1; const x1=Math.min(W-1,bx+s-r-1), z1=Math.min(H-1,bz+s-r-1); if(x1-x0<7||z1-z0<7) continue; block++;
+    if(srand()<(opt.openChance||0.2)){ // Platz oder Park
+      const park=srand()<0.5; for(let x=x0;x<=x1;x++) for(let z=z0;z<=z1;z++) ops.push({t:park?'grass':'cobble',x,z,w:1,h:1}); continue; }
+    const cells=[]; const mark=(cx,cz)=>{ cells.push([cx,cz]); ops.push({t:'block',x:cx,z:cz,w:1,h:1}); };
+    const sides=[ {dx:0,dz:-1, from:[x0+2,z0], to:[x1-2,z0], step:[1,0], depth:[0,1]}, {dx:1,dz:0, from:[x1,z0+2], to:[x1,z1-2], step:[0,1], depth:[-1,0]}, {dx:0,dz:1, from:[x0+2,z1], to:[x1-2,z1], step:[1,0], depth:[0,-1]}, {dx:-1,dz:0, from:[x0,z0+2], to:[x0,z1-2], step:[0,1], depth:[1,0]} ];
+    const gapSide=Math.floor(srand()*4), gapSide2=srand()<0.5?Math.floor(srand()*4):-1;
+    sides.forEach((sd,si)=>{ const len=Math.abs(sd.to[0]-sd.from[0])+Math.abs(sd.to[1]-sd.from[1])+1; const nSlots=Math.floor(len/2); const gapAt = (si===gapSide||si===gapSide2)? Math.floor(nSlots/2) : -1; const lampEvery=3;
+      for(let k=0;k<nSlots;k++){ const a=[sd.from[0]+sd.step[0]*k*2, sd.from[1]+sd.step[1]*k*2]; if(k===gapAt) continue; // Gasse
+        const cs=[]; for(let d=0;d<2;d++) for(let w=0;w<2;w++){ const cx=a[0]+sd.step[0]*w+sd.depth[0]*d, cz=a[1]+sd.step[1]*w+sd.depth[1]*d; cs.push([cx,cz]); }
+        cs.forEach(([cx,cz])=>mark(cx,cz));
+        // Slotmitte (Weltkoordinaten später): Mittelpunkt der 2x2 Zellen
+        const mx=(cs[0][0]+cs[3][0])/2, mz=(cs[0][1]+cs[3][1])/2;
+        ops.houses.push({cx:mx, cz:mz, dx:sd.dx, dz:sd.dz, cells:cs, corner:false, shop: srand()<(opt.shopChance||0.3), rnd:srand(), block, lamp:(k%lampEvery===1)});
+      }
+      if(len%2===1){ const a=[sd.to[0],sd.to[1]]; for(let d=0;d<2;d++) mark(a[0]+sd.depth[0]*d, a[1]+sd.depth[1]*d); } // Restzelle füllen
+    });
+    // Ecken 2x2 mit Eckhaus: Front so, dass die rechte Modellseite frei steht
+    const corners=[ {cx:x0,cz:z0,dx:0,dz:-1}, {cx:x1-1,cz:z0,dx:1,dz:0}, {cx:x1-1,cz:z1-1,dx:0,dz:1}, {cx:x0,cz:z1-1,dx:-1,dz:0} ];
+    corners.forEach(c=>{ const cs=[]; for(let dx=0;dx<2;dx++) for(let dz=0;dz<2;dz++){ cs.push([c.cx+dx,c.cz+dz]); mark(c.cx+dx,c.cz+dz); } ops.houses.push({cx:c.cx+0.5, cz:c.cz+0.5, dx:c.dx, dz:c.dz, cells:cs, corner:true, shop: srand()<0.5, rnd:srand(), block, lamp:true}); });
+    for(let x=x0+2;x<=x1-2;x++) for(let z=z0+2;z<=z1-2;z++) ops.push({t:'cobble',x,z,w:1,h:1}); // Hinterhof
+  }
+  return ops;
+}
 const PIG_LINES = [ ['theo','London klingt anders.'], ['john','London klingt laut.'], ['theo','Das meine ich.'] ];
 
 /* ---------- Missionen ---------- */
 const MISSIONS = [
  { index:0, chapter:'Prolog', title:'Borehamwood, 1995', caption:'Borehamwood. 1995. This is where it started.', seed:3,
    fog:0x0d0f14, sky:0x7a8fb8, rain:true, camDist:36, skyTop:'#06070c', skyHorizon:'#1c2233',
-   map:{w:40,h:40,ground:'grass',treeDensity:0.07,brick:0x5a3a2e,lit:0.6,graffiti:false,paint:(()=>{ const o=[{t:'asphalt',x1:0,z1:20,x2:39,z2:20,w:3}]; for(let i=0;i<5;i++){ o.push({t:'block',x:3+i*7,z:14,w:4,h:2}); o.push({t:'block',x:4+i*7,z:25,w:4,h:2}); } clearArea(o,'dirt',17,28,6,6); return o; })()},
+   map:{w:40,h:40,ground:'grass',set:'camden',palette:['brick_red','brick_london'],treeDensity:0.07,brick:0x5a3a2e,lit:0.6,graffiti:false,paint:(()=>{ const o=[{t:'asphalt',x1:0,z1:20,x2:39,z2:20,w:3}]; o.houses=[]; for(let i=0;i<7;i++){ const cx=4+i*5; for(const [cz,dz] of [[16,1],[23,-1]]){ const cs=[]; for(let a=0;a<2;a++) for(let b=0;b<2;b++){ cs.push([cx+a,cz+b]); o.push({t:'block',x:cx+a,z:cz+b,w:1,h:1}); } o.houses.push({cx:cx+1,cz:cz+1,dx:0,dz:dz,cells:cs,corner:false,shop:false,rnd:(i*0.37)%1,block:i%2,lamp:i%3===1}); } } clearArea(o,'dirt',17,28,6,6); return o; })()},
    startKale:320, startRuf:40, build:['buehne','heuturm'], train:[], buildRadius:16, enemyActive:true, spawn:[[2,21],[37,21]],
    director:{start:45, every:38, base:2, grow:0.7, types:['nachbar'], from:[[2,20],[37,20]], after:g=>g.objectives[1].done},
    brief:[['sys','Borehamwood roch nicht nach Rock’n’Roll. Es roch nach nassem Rasen, warmem Plastik und diesem ewigen Vorstadtlicht.'],['sys','Zwei Käfige. Zwei Welten. Die Decke dazwischen dünn wie ein schlechtes Versprechen.'],['theo','Was ist das?'],['john','Musik.'],['theo','Das will ich machen.'],['john','Du weißt nicht wie.'],['theo','Noch nicht.'],['sys','Die Nachbarn hören mit. Sobald ihr spielt, kommen Lärmbeschwerden im Bademantel. Haltet die Bühne, bis der Song durch ist.']],
@@ -1287,7 +1422,7 @@ const MISSIONS = [
  },
  { index:1, chapter:'Kapitel I', title:'Camden – Die Mäuse-Invasion', caption:'Camden. 1996. They’re not fans. They’re thieves.', seed:9,
    fog:0x0b0c10, sky:0x6f84ad, rain:true, camDist:40, skyTop:'#05060a', skyHorizon:'#231a22',
-   map:{w:54,h:54,ground:'cobble',neon:['CYBERDOG','THE GOOD MIXER','STABLES MARKET','KEBAB · CHIPS','RECORDS','TATTOO'],paint:(()=>{ const o=cityPaint(54,54,{street:11,seed:9,openChance:0.2}); clearArea(o,'cobble',16,16,12,12); clearArea(o,'dirt',31,19,5,5); clearArea(o,'dirt',12,31,5,5); clearArea(o,'asphalt',44,44,8,8); clearArea(o,'asphalt',2,2,8,8); return o; })(), signs:[{x:27,z:2,text:'CAMDEN MARKET',bg:'#2a1a1a'},{x:5,z:49,text:'THE GOOD MIXER',bg:'#1a2a1a'}]},
+   map:{w:56,h:56,ground:'cobble',set:'camden',shopChance:0.35,buses:[[28,52,0]],palette:['brick_london','brick_london','brick_red','brick_dark'],neon:['CYBERDOG','THE GOOD MIXER','STABLES MARKET','KEBAB · CHIPS','RECORDS','TATTOO'],paint:(()=>{ const o=cityPaint2(56,56,{street:14,seed:9,openChance:0.2,shopChance:0.35}); clearArea(o,'cobble',16,16,12,12); clearArea(o,'dirt',31,19,5,5); clearArea(o,'dirt',12,31,5,5); clearArea(o,'asphalt',44,44,8,8); clearArea(o,'asphalt',2,2,8,8); return o; })(), signs:[{x:27,z:2,text:'CAMDEN MARKET',bg:'#2a1a1a'},{x:5,z:49,text:'THE GOOD MIXER',bg:'#1a2a1a'}]},
    startKale:160, startRuf:10, build:['proberaum','heuturm','lager'], train:['maus','fan'], enemyActive:true, enemyCap:12,
    director:{start:90, every:55, base:2, grow:0.7, types:['bote','inspektor','makler'], from:[[47,44],[48,6]]},
    brief:[['sys','Camden, Nordlondon. Zu klein. Zu laut. Zu lebendig. Die Nachbarin hatte einen Topf auf dem Herd vergessen. Die Feuerwehr hinterließ Lücken.'],['sys','In der nächsten Nacht kamen die Mäuse.'],['theo','Wir haben Gesellschaft.'],['john','Das ist eine Maus.'],['theo','Das ist ein Fan.'],['john','Die will das Futter.'],['theo','Alle wollen was. Die wenigsten kommen wegen der Musik. Trotzdem zählen sie.']],
@@ -1311,7 +1446,7 @@ const MISSIONS = [
  },
  { index:2, chapter:'Kapitel II', title:'The Camden Gig', caption:'Camden. The Room With No Name. For two minutes and forty seconds, everything was right.', seed:14,
    fog:0x0a0a0c, sky:0x5f74a0, rain:true, camDist:40, skyTop:'#040409', skyHorizon:'#24161a',
-   map:{w:56,h:56,ground:'cobble',neon:['THE MONARCH','ROUNDHOUSE','CAMDEN LOCK','ELECTRIC BALLROOM','OFF LICENCE','CYBERDOG'],paint:(()=>{ const o=cityPaint(56,56,{street:11,seed:14,openChance:0.15}); clearArea(o,'cobble',22,22,12,12); clearArea(o,'dirt',36,26,4,4); clearArea(o,'dirt',16,36,4,4); clearArea(o,'asphalt',0,0,6,6); clearArea(o,'asphalt',50,0,6,6); clearArea(o,'asphalt',50,50,6,6); clearArea(o,'asphalt',0,50,6,6); return o; })(), signs:[{x:28,z:17,text:'(kein Schild)',fg:'#5a5550',bg:'#0a0a0a'}]},
+   map:{w:56,h:56,ground:'cobble',set:'camden',buses:[[3,28,Math.PI/2]],palette:['brick_london','brick_dark','brick_red'],neon:['THE MONARCH','ROUNDHOUSE','CAMDEN LOCK','ELECTRIC BALLROOM','OFF LICENCE','CYBERDOG'],paint:(()=>{ const o=cityPaint2(56,56,{street:14,seed:14,openChance:0.15,shopChance:0.4}); clearArea(o,'cobble',22,22,12,12); clearArea(o,'dirt',36,26,4,4); clearArea(o,'dirt',16,36,4,4); clearArea(o,'asphalt',0,0,6,6); clearArea(o,'asphalt',50,0,6,6); clearArea(o,'asphalt',50,50,6,6); clearArea(o,'asphalt',0,50,6,6); return o; })(), signs:[{x:28,z:17,text:'(kein Schild)',fg:'#5a5550',bg:'#0a0a0a'}]},
    startKale:260, startRuf:20, build:['proberaum','heuturm','lager','buehne','ampwall'], train:['maus','fan','roadie'], enemyActive:true, enemyCap:16,
    brief:[['sys','Der Ort hatte keinen Namen über der Tür. Kein Schild. Kein Logo. Nur eine Eisentür in einer Seitenstraße hinter dem Camden Market.'],['theo','Dreißig. Vielleicht fünfunddreißig.'],['john','Genug.'],['theo','Vor fünf Leuten zeigst du, was du kannst. Vor dreißig fängst du an zu existieren.'],['sys','Das Bauamt hat den Gig bemerkt. Zwei Minuten und vierzig Sekunden. So lange muss der Raum stehen.']],
    objectives:[ {text:'Den Raum ohne Namen 2:40 lang halten', check:g=>g.time>=160 && g.buildings.some(b=>b.type==='raum'&&b.alive)} ],
@@ -1326,7 +1461,7 @@ const MISSIONS = [
  },
  { index:3, chapter:'Kapitel III–IV', title:'Winter in Camden – Fucker Sucker', caption:'Die schwarzen Monate. Die Heizung gab an einem Dienstag den Geist auf.', seed:21, unlock:['fsucker'],
    fog:0x1a1d24, sky:0x9fb0d0, groundLight:0x5a6070, hemi:0.9, sun:0xcfd8ff, sunI:0.8, snow:true, fogNear:40, fogFar:130, camDist:42, skyTop:'#0a0c12', skyHorizon:'#2a2d36', starsOpacity:0.2,
-   map:{w:58,h:58,ground:'snow',brick:0x3a2f2a,roof:0xdfe4ea,lit:0.7,neon:['CHIPPY','THE MONARCH','PAWN','LATE NIGHT'],paint:(()=>{ const o=cityPaint(58,58,{street:12,seed:21,openChance:0.2}); clearArea(o,'snow',8,38,12,12); clearArea(o,'dirt',22,44,4,4); clearArea(o,'dirt',6,28,4,4); clearArea(o,'asphalt',40,6,14,14); clearArea(o,'asphalt',26,10,8,8); return o; })()},
+   map:{w:58,h:58,ground:'snow',set:'camden',palette:['brick_dark','brick_london','brick_red'],brick:0x3a2f2a,roof:0xdfe4ea,lit:0.7,neon:['CHIPPY','THE MONARCH','PAWN','LATE NIGHT'],paint:(()=>{ const o=cityPaint2(58,58,{street:14,seed:21,openChance:0.2,shopChance:0.25}); clearArea(o,'snow',8,38,12,12); clearArea(o,'dirt',22,44,4,4); clearArea(o,'dirt',6,28,4,4); clearArea(o,'asphalt',40,6,14,14); clearArea(o,'asphalt',26,10,8,8); return o; })()},
    startKale:320, startRuf:40, enemyActive:true, enemyCap:16, spawnMul:1.2,
    director:{start:70, every:50, base:3, grow:0.8, types:['bote','makler','inspektor'], from:[[44,16],[29,17]], bagger:4},
    brief:[['sys','Der Londoner Winter kam nicht wie ein Gast. Er kam wie ein Einzug. Die Heizung wurde einfach kälter, dann kalt, dann weg.'],['sys','Draußen ist es kalt: Wer sich weit von den eigenen Gebäuden entfernt, verliert langsam Kraft. In der Nähe erholt man sich.'],['theo','Hör auf.'],['john','Nein. Spiel ihn nochmal.'],['sys','So entstand der zweite Song. Fucker Sucker. Theo sagte, es sei eine Haltung. John sagte, es sei ein grammatikalisches Problem.'],['sys','Theo hat eine neue Fähigkeit: F. Das Bauamt sitzt im Nordosten. Reißt es ab.']],
@@ -1344,7 +1479,7 @@ const MISSIONS = [
  },
  { index:4, chapter:'Kapitel V', title:'Der Kale-Komplex', caption:'It was just kale. Nothing is ever just kale.', seed:33,
    fog:0x0a0c0a, sky:0x7f9cb0, hemi:0.6, rain:false, camDist:44, skyTop:'#05080a', skyHorizon:'#1c2a1e',
-   map:{w:60,h:60,ground:'cobble',neon:['GREENGROCER','KALE','CAMDEN MARKET','INVERNESS ST'],paint:(()=>{ const o=cityPaint(60,60,{street:12,seed:33,openChance:0.35}); clearArea(o,'cobble',6,42,12,12); clearArea(o,'dirt',24,24,12,12); clearArea(o,'asphalt',44,6,12,12); clearArea(o,'asphalt',6,6,8,8); clearArea(o,'asphalt',46,44,8,8); return o; })(), signs:[{x:30,z:22,text:'GRÜNKOHL',fg:'#7fc45c',bg:'#102010'}]},
+   map:{w:60,h:60,ground:'cobble',set:'camden',buses:[[30,2,0]],palette:['brick_london','brick_red','brick_london'],neon:['GREENGROCER','KALE','CAMDEN MARKET','INVERNESS ST'],paint:(()=>{ const o=cityPaint2(60,60,{street:14,seed:33,openChance:0.3,shopChance:0.4}); clearArea(o,'cobble',6,42,12,12); clearArea(o,'dirt',24,24,12,12); clearArea(o,'asphalt',44,6,12,12); clearArea(o,'asphalt',6,6,8,8); clearArea(o,'asphalt',46,44,8,8); return o; })(), signs:[{x:30,z:22,text:'GRÜNKOHL',fg:'#7fc45c',bg:'#102010'}]},
    startKale:220, startRuf:30, enemyActive:true, enemyCap:18,
    director:{start:60, every:48, base:3, grow:0.9, types:['makler','bote','inspektor'], from:[[47,22],[8,8]], boss:4, bagger:5},
    brief:[['sys','Jemand hatte Grünkohl stehen lassen. Er lag auf dem Küchentisch wie ein Objekt ohne Bedeutung. Bis er Bedeutung bekam.'],['theo','Wir brauchen mehr.'],['john','Wir haben genug.'],['theo','Das sagst du über alles.'],['john','Nicht beim Grünkohl. Beim Grünkohl stimmt es nie.'],['sys','Das große Feld liegt in der Mitte. Das Bauamt will es auch. Ein Grünkohl-Lager neben dem Feld verkürzt die Wege und zahlt Bonus.']],
@@ -1361,7 +1496,7 @@ const MISSIONS = [
  },
  { index:5, chapter:'Kapitel VI', title:'Die Stadt, die sich selbst frisst', caption:'Camden. End of the 90s. The city didn’t throw them out. It just stopped knowing them.', seed:44,
    fog:0x0a0a0d, sky:0x6b7fa8, rain:true, camDist:44, spawnMul:0.9, skyTop:'#050509', skyHorizon:'#2a1c24',
-   map:{w:62,h:62,ground:'cobble',neon:['TO LET','LUXURY LIVING','ESTATE AGENTS','SOLD','CAFÉ','COMING SOON'],paint:(()=>{ const o=cityPaint(62,62,{street:12,seed:44,openChance:0.3}); clearArea(o,'cobble',6,44,12,12); clearArea(o,'dirt',20,50,4,4); clearArea(o,'dirt',4,34,4,4); clearArea(o,'asphalt',40,4,18,18); clearArea(o,'asphalt',56,52,6,8); clearArea(o,'asphalt',24,28,8,8); return o; })(), signs:[{x:49,z:2,text:'LUXURY APARTMENTS · SOLD',fg:'#0a0a0a',bg:'#e6dfd0'}]},
+   map:{w:62,h:62,ground:'cobble',set:'camden',palette:['brick_london','brick_dark','brick_red'],neon:['TO LET','LUXURY LIVING','ESTATE AGENTS','SOLD','CAFÉ','COMING SOON'],paint:(()=>{ const o=cityPaint2(62,62,{street:14,seed:44,openChance:0.25,shopChance:0.3}); clearArea(o,'cobble',6,44,12,12); clearArea(o,'dirt',20,50,4,4); clearArea(o,'dirt',4,34,4,4); clearArea(o,'asphalt',40,4,18,18); clearArea(o,'asphalt',56,52,6,8); clearArea(o,'asphalt',24,28,8,8); return o; })(), signs:[{x:49,z:2,text:'LUXURY APARTMENTS · SOLD',fg:'#0a0a0a',bg:'#e6dfd0'}]},
    startKale:340, startRuf:40, enemyActive:true, enemyCap:20,
    director:{start:50, every:45, base:3, grow:1.0, types:['bote','makler','inspektor','bagger'], from:[[49,20],[30,34]], boss:3},
    brief:[['sys','London veränderte sich auf eine Art, die keine Meinung brauchte. Nur Arithmetik. Die Mieten stiegen. Die Venues schlossen.'],['theo','Wir suchen uns einen neuen Raum.'],['john','Es gibt keinen neuen Raum. Die Räume, die es noch gibt, werden nächstes Jahr auch Zettel haben.'],['theo','Dann kämpfen wir dagegen.'],['john','Wogegen? Gegen Geld? Gegen Grundstückspreise?'],['sys','Das Immobilien-Büro baut alle 50 Sekunden eine neue Eigentumswohnung. Reißt das Büro ab. Dann: der Van. München wartet.']],
@@ -1392,7 +1527,7 @@ const MISSIONS = [
  },
  { index:7, chapter:'Kapitel X–XII', title:'Pratteln – Die Z7', caption:'Pratteln. The night everything changed. Again.', seed:66,
    fog:0x0b0d12, sky:0x9ab0d8, hemi:0.65, rain:false, camDist:42, skyTop:'#060810', skyHorizon:'#1a2030',
-   map:{w:62,h:50,ground:'concrete',brick:0x6a6a66,lit:0.35,graffiti:false,neon:['Z7','COOP','PRATTELN','MIGROS','KIOSK'],paint:(()=>{ const o=cityPaint(62,50,{street:12,seed:66,openChance:0.3}); clearArea(o,'cobble',4,20,10,10); clearArea(o,'asphalt',44,18,16,16); clearArea(o,'dirt',40,36,4,4); clearArea(o,'dirt',56,10,4,4); clearArea(o,'asphalt',0,0,6,6); clearArea(o,'asphalt',56,0,6,6); clearArea(o,'asphalt',0,44,6,6); return o; })(), signs:[{x:51,z:16,text:'Z7 · PRATTELN',fg:'#e6394a',bg:'#0a0a0a'},{x:8,z:18,text:'SMOKEY & BOUNTY',fg:'#b9b4c7',bg:'#1a1a22'}]},
+   map:{w:62,h:50,ground:'concrete',set:'camden',palette:['brick_dark','brick_red','brick_dark'],brick:0x6a6a66,lit:0.35,graffiti:false,neon:['Z7','COOP','PRATTELN','MIGROS','KIOSK'],paint:(()=>{ const o=cityPaint2(62,50,{street:14,seed:66,openChance:0.3,shopChance:0.2}); clearArea(o,'cobble',4,20,10,10); clearArea(o,'asphalt',44,18,16,16); clearArea(o,'dirt',40,36,4,4); clearArea(o,'dirt',56,10,4,4); clearArea(o,'asphalt',0,0,6,6); clearArea(o,'asphalt',56,0,6,6); clearArea(o,'asphalt',0,44,6,6); return o; })(), signs:[{x:51,z:16,text:'Z7 · PRATTELN',fg:'#e6394a',bg:'#0a0a0a'},{x:8,z:18,text:'SMOKEY & BOUNTY',fg:'#b9b4c7',bg:'#1a1a22'}]},
    startKale:400, startRuf:60, build:['proberaum','heuturm','lager','buehne','ampwall'], train:['maus','fan','roadie'], enemyActive:false, enemyCap:14, spawnMul:1.6, buildRadius:16,
    brief:[['sys','Theo zog in ein Haus nahe Pratteln. Das war kein Zufall. Die Mitbewohner hießen Smokey und Bounty. British Shorthair. Beide grau, beide massiv.'],['cat','Du hörst die Musik. Du gehst nicht hin.'],['theo','Noch nicht.'],['cat','Warum noch nicht?'],['theo','Weil es sich falsch anfühlt ohne ihn.'],['cat','Ich weiß. Deshalb wirst du hingehen.'],['sys','Bringt Theo zur Z7 im Osten. Smokey und Bounty kommen mit. Dann: 2:40 halten. Noch einmal.']],
    objectives:[ {text:'Theo zur Z7 bringen', check:g=>{ const z=g.buildings.find(b=>b.type==='z7'); return z&&g.theo&&g.theo.alive&&g.theo.distTo(z)<4; }, onDone:g=>{ g.flags.z7=g.time; g.mission.enemyActive=true; const z=g.buildings.find(b=>b.type==='z7'); const a=g.spawnUnit('adriana',1,z.x-3,z.z+6), s=g.spawnUnit('susanna',1,z.x+3,z.z+6); g.spawnBuilding('kaefig',1,47,30); g.spawnBuilding('proberaum',1,52,30); g.say('sys','Zwei Reihen weiter. Adriana und Susanna. Und dann passierte etwas, das er nicht kontrollieren konnte.'); g.say('theo','(gurrt)',3); g.say('adriana','Kennen wir uns?'); g.say('theo','Noch nicht. Aber das ist lösbar.'); g.say('susanna','Du machst gerade ein Geräusch.'); g.say('theo','Weil manche Situationen keine andere Reaktion zulassen.'); g.say('bauamt','Baubehörde Basel-Landschaft. Lärmschutz. Der Betrieb ist einzustellen.',5); g.log('Käfig und Proberaum stehen neben der Z7. Jetzt bauen und halten.'); UI.refreshObjectives(); }},
@@ -1433,7 +1568,7 @@ const Flow = {
     $('b-start').onclick=()=>this.start(m); $('b-back').onclick=()=>this.menu();
   },
   name(w){ return {theo:'Theo',john:'John',sys:'',cat:'Smokey',bauamt:'Das Bauamt',adriana:'Adriana',susanna:'Susanna',bounty:'Bounty'}[w]||''; },
-  start(m){ if(game){ UI.stop(); game.dispose(); game=null; } Audio.init(); Audio.ensure(); Input.attackMode=false; Input.groups={}; game=new Game(m); game.kaleTotal=0; const addK=game.addKale.bind(game); game.addKale=n=>{ addK(n); game.kaleTotal+=n; }; UI.start(); this.hide(); if(Audio.on) Audio.startRain(); },
+  async start(m){ if(game){ UI.stop(); game.dispose(); game=null; } Audio.init(); Audio.ensure(); if(!Assets.ready){ this.overlay(`<div class="eyebrow">Einen Moment</div><h2>Camden wird aufgebaut.</h2><p style="margin-top:10px">Ziegel, Schiefer, Laternen, Telefonzellen. Dauert ein paar Sekunden.</p>`); await Assets.load(); } Input.attackMode=false; Input.groups={}; game=new Game(m); game.kaleTotal=0; const addK=game.addKale.bind(game); game.addKale=n=>{ addK(n); game.kaleTotal+=n; }; UI.start(); this.hide(); if(Audio.on) Audio.startRain(); },
   debrief(m, won){ UI.stop(); const lines = won ? m.outro : [['sys', game.loseText||'Die Band ist am Ende.']]; const last = won && m.index===MISSIONS.length-1;
     this.overlay(`<div class="eyebrow">${won?'Mission erfüllt':'Mission gescheitert'} · ${m.title}</div><h2>${won?(last?'Das Ende, das keines war':'Weiter.'):'Nochmal.'}</h2>
       <div class="scene">${img(won?DEBRIEF_IMG[m.index]:BRIEF_IMG[m.index])}</div>
@@ -1463,7 +1598,7 @@ let lastT=performance.now();
 function loop(t){ requestAnimationFrame(loop); const real=Math.min(0.05,(t-lastT)/1000); lastT=t; if(!game) return;
   if(!Flow.paused && !game.over){ for(let i=0;i<game.speed;i++) game.update(real); } else if(game.over){ fx.update(real); game.units.forEach(u=>{ if(u.dead) u.update(real); else u.sync(real,false); }); }
   Input.update(real); updateCamera(real); LampLights.update(); Post.render(t/1000); Quality.frame(real*1000); }
-Object.assign(window, {CC:true, Flow, MISSIONS, UI, Input, cam, Post, Quality, renderer, scene, camera, Models3D, updateCamera, camTo, UNITS, BUILDINGS, Unit, Building, rnd, dist2, Audio, Tex, THREE});
+Object.assign(window, {CC:true, Flow, MISSIONS, UI, Input, cam, Post, Quality, renderer, scene, camera, Models3D, Assets, cityPaint2, updateCamera, camTo, UNITS, BUILDINGS, Unit, Building, rnd, dist2, Audio, Tex, THREE});
 Object.defineProperty(window, 'game', {get:()=>game});
 Input.init(); UI.init(); Flow.menu(); Models3D.load(); updateCamera(); requestAnimationFrame(loop);
 </script>
