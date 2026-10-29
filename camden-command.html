@@ -277,7 +277,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
    ===================================================================== */
 'use strict';
 
-const VERSION='13 · Gebäude';
+const VERSION='14 · John & Theo';
 let game=null;                  // aktuelle Partie
 let nextId=1;
 const CELL = 2;                 // Weltgröße einer Rasterzelle
@@ -633,7 +633,8 @@ const Assets = {
     const all=await Promise.all(names.flatMap(n=>[ld(n+'_col'),ld(n+'_nrm'),ld(n+'_rgh')]));
     names.forEach((n,i)=>{ const c=all[i*3], nm=all[i*3+1], r=all[i*3+2]; if(c){ c.colorSpace=THREE.SRGBColorSpace; this.tex[n]={map:c,normalMap:nm,roughnessMap:r}; } });
     const loadSet=(file)=>new Promise(res=>new GLTFLoader().load(IMG+'set/'+file, g=>res(g), undefined, e=>{ console.warn(file+' nicht geladen:', e); res(null); }));
-    const [gltf,gltfB]=await Promise.all([loadSet('camden.json'), loadSet('buildings.json')]);
+    const [gltf,gltfB,gJohn,gTheo]=await Promise.all([loadSet('camden.json'), loadSet('buildings.json'), loadSet('john.json'), loadSet('theo.json')]);
+    this.heroes={}; [['john',gJohn,5.6],['theo',gTheo,5.1]].forEach(([n,g,sc])=>{ if(!g) return; g.scene.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=false; if(o.material){ o.material.envMapIntensity=0.35; o.material.roughness=Math.min(0.95, (o.material.roughness||0.8)+0.1); } } }); g.scene.scale.setScalar(sc); this.heroes[n]=g.scene; });
     for(const g of [gltf,gltfB]){ if(!g) continue; this.set=this.set||{}; g.scene.traverse(o=>{ if(o.isMesh){ const root=(o.parent && o.parent!==g.scene)? o.parent : o; const name=root.name.replace(/_\d+$/,''); (this.set[name]=this.set[name]||[]).push({geo:o.geometry, matName:(o.material&&o.material.name)||'paint'}); } }); }
     this.ready=true;
   },
@@ -669,7 +670,9 @@ const Models3D = {
   get(name){ const g=this.geo(name); if(!g) return null; const mesh=new THREE.Mesh(g, this.mat); mesh.castShadow=true; mesh.receiveShadow=false; const grp=new THREE.Group(); grp.add(mesh); return grp; }
 };
 function buildUnitModel(def){
-  const m3=Models3D.get(def.model3d||Object.keys(UNITS).find(k=>UNITS[k]===def));
+  const key=Object.keys(UNITS).find(k=>UNITS[k]===def);
+  if(Assets.heroes && Assets.heroes[key]){ const grp=new THREE.Group(); const inner=Assets.heroes[key].clone(); grp.add(inner); return grp; }
+  const m3=Models3D.get(def.model3d||key);
   if(m3){ if(def.harvester){ const leaf=mesh(GEO.sph, mat(0x3e7a2d), 0.22,0.14,0.22, 0,0.5,0.1,false); leaf.name='carry'; leaf.visible=false; m3.add(leaf); } return m3; }
   switch(def.model){
     case 'john': return Models.john(); case 'theo': return Models.theo(); case 'maus': return Models.maus();
