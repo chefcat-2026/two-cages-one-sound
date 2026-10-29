@@ -277,6 +277,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
    ===================================================================== */
 'use strict';
 
+const VERSION='12 · Camden-Set';
 let game=null;                  // aktuelle Partie
 let nextId=1;
 const CELL = 2;                 // Weltgröße einer Rasterzelle
@@ -1555,7 +1556,7 @@ const Flow = {
     this.overlay(`<div class="menu-hero">${img(1)}<div><div class="eyebrow">Two Cages, One Sound · Das Strategiespiel</div><h1>Camden <em>Command</em></h1><p style="margin-top:10px">Zwei Käfige. Zwei Welten. Ein Sound. Und ein Bauamt, das Zettel verteilt. Echtzeitstrategie durch alle Kapitel: Grünkohl ernten, Proberäume bauen, Räume halten, die Stadt überleben.</p></div></div>
       <ul class="missions">${MISSIONS.map(m=>`<li><button ${m.index>prog?'disabled':''} data-m="${m.index}" ${m.index===prog?'autofocus':''}>${img(BRIEF_IMG[m.index],'thumb')}<span><span class="t">${m.index+1} · ${m.title}</span><br><span class="s">${m.chapter}</span></span><span class="st ${m.index<prog?'done':''}">${m.index<prog?'gespielt':m.index===prog?'offen':'gesperrt'}</span></button></li>`).join('')}</ul>
       <div class="row" style="margin-top:18px"><span class="diff" id="m-diff">${['leicht','normal','hart'].map(d=>`<button data-d="${d}" class="${store.get('diff','normal')===d?'active':''}">${d}</button>`).join('')}</span><button class="btn ghost" id="m-help">Steuerung</button>${prog>0?'<button class="btn ghost" id="m-reset">Fortschritt löschen</button>':''}<a class="btn ghost" href="https://chefcat-2026.github.io/two-cages-one-sound/">Zum Buch</a></div>
-      <p class="footnote">Der Schalter „Tusche“ oben rechts rendert das Spiel schwarz-weiß-rot wie die Illustrationen. Nach dem Roman von U. Rinner. Läuft im Browser, am besten mit Maus und Tastatur. Am Handy: Tippen wählt, langes Tippen oder Tippen auf freien Boden schickt los, Ziehen bewegt die Kamera, zwei Finger zoomen.</p>`);
+      <p class="footnote">Version ${VERSION}. Der Schalter „Tusche“ oben rechts rendert das Spiel schwarz-weiß-rot wie die Illustrationen. Nach dem Roman von U. Rinner. Läuft im Browser, am besten mit Maus und Tastatur. Am Handy: Tippen wählt, langes Tippen oder Tippen auf freien Boden schickt los, Ziehen bewegt die Kamera, zwei Finger zoomen.</p>`);
     document.querySelectorAll('.missions button').forEach(b=>b.onclick=()=>this.briefing(MISSIONS[+b.dataset.m]));
     document.querySelectorAll('.missions button').forEach(b=>b.onclick=()=>this.briefing(MISSIONS[+b.dataset.m]));
     document.querySelectorAll('#m-diff button').forEach(b=>b.onclick=()=>{ store.set('diff',b.dataset.d); document.querySelectorAll('#m-diff button').forEach(x=>x.classList.toggle('active',x===b)); });
@@ -1568,7 +1569,7 @@ const Flow = {
     $('b-start').onclick=()=>this.start(m); $('b-back').onclick=()=>this.menu();
   },
   name(w){ return {theo:'Theo',john:'John',sys:'',cat:'Smokey',bauamt:'Das Bauamt',adriana:'Adriana',susanna:'Susanna',bounty:'Bounty'}[w]||''; },
-  async start(m){ if(game){ UI.stop(); game.dispose(); game=null; } Audio.init(); Audio.ensure(); if(!Assets.ready){ this.overlay(`<div class="eyebrow">Einen Moment</div><h2>Camden wird aufgebaut.</h2><p style="margin-top:10px">Ziegel, Schiefer, Laternen, Telefonzellen. Dauert ein paar Sekunden.</p>`); await Assets.load(); } Input.attackMode=false; Input.groups={}; game=new Game(m); game.kaleTotal=0; const addK=game.addKale.bind(game); game.addKale=n=>{ addK(n); game.kaleTotal+=n; }; UI.start(); this.hide(); if(Audio.on) Audio.startRain(); },
+  async start(m){ if(game){ UI.stop(); game.dispose(); game=null; } Audio.init(); Audio.ensure(); if(!Assets.ready){ this.overlay(`<div class="eyebrow">Einen Moment</div><h2>Camden wird aufgebaut.</h2><p style="margin-top:10px">Ziegel, Schiefer, Laternen, Telefonzellen. Dauert ein paar Sekunden.</p>`); await Assets.load(); } Input.attackMode=false; Input.groups={}; game=new Game(m); game.kaleTotal=0; setTimeout(()=>{ if(game!==undefined&&game) UI.log(Assets.set? `Straßenset geladen (Version ${VERSION}).` : `Straßenset NICHT geladen, einfache Häuser aktiv (Version ${VERSION}).`, Assets.set?'':'alert'); }, 400); const addK=game.addKale.bind(game); game.addKale=n=>{ addK(n); game.kaleTotal+=n; }; UI.start(); this.hide(); if(Audio.on) Audio.startRain(); },
   debrief(m, won){ UI.stop(); const lines = won ? m.outro : [['sys', game.loseText||'Die Band ist am Ende.']]; const last = won && m.index===MISSIONS.length-1;
     this.overlay(`<div class="eyebrow">${won?'Mission erfüllt':'Mission gescheitert'} · ${m.title}</div><h2>${won?(last?'Das Ende, das keines war':'Weiter.'):'Nochmal.'}</h2>
       <div class="scene">${img(won?DEBRIEF_IMG[m.index]:BRIEF_IMG[m.index])}</div>
