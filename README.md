@@ -11,3 +11,9 @@ Straßenset: `tools/bake_textures.py` backt die PBR-Materialien nach `img/tex/`,
 Eigene Figuren: GLB ins Repo legen, mit `python3 tools/glb2json.py Datei.glb img/set/name.json` umwandeln; das Spiel lädt `img/set/john.json` und `img/set/theo.json` als Heldenmodelle (Kopf nach +Z, Maße in Metern, Skalierung im Lader).
 
 Credits und Lizenzhinweise: siehe [CREDITS.md](CREDITS.md).
+
+## Lizenz
+Die MIT-Lizenz (`LICENSE`) gilt nur für den **Quellcode**: den Spielcode in den HTML-Dateien und die Skripte in `tools/`. `lib/` (Three.js) behält seine eigene MIT-Lizenz.
+
+**Nicht** unter der MIT-Lizenz stehen Text, Figuren, 3D-Modelle, Illustrationen, Cover und die Inhalte des Romans *Two Cages, One Sound*. Dafür gilt: alle Rechte vorbehalten. Spielen und den Link teilen ist ausdrücklich erwünscht.
+

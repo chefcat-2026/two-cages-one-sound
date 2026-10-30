@@ -13,4 +13,4 @@
 - Schriften über Google Fonts: Metal Mania, Archivo, Source Serif 4 (SIL Open Font License).
 - Gebaut mit Unterstützung von Claude (Anthropic).
 
-Alle Rechte an Text, Figuren, Illustrationen und Spielinhalt bleiben bei U. Rinner, soweit nicht oben anders angegeben.
+Der Quellcode steht unter der MIT-Lizenz (siehe `LICENSE`). Alle Rechte an Text, Figuren, Modellen, Illustrationen und Spielinhalt bleiben bei U. Rinner, soweit nicht oben anders angegeben.
