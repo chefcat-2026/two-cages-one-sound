@@ -9,3 +9,5 @@ Figuren für Camden Command: `tools/figures.py` baut sie in Blender (auch headle
 Straßenset: `tools/bake_textures.py` backt die PBR-Materialien nach `img/tex/`, `tools/camden_set.py` baut Reihenhäuser und Straßenmöbel und exportiert `img/set/camden.json` (glTF mit eingebettetem Puffer). Beide laufen headless mit `pip install bpy`.
 
 Eigene Figuren: GLB ins Repo legen, mit `python3 tools/glb2json.py Datei.glb img/set/name.json` umwandeln; das Spiel lädt `img/set/john.json` und `img/set/theo.json` als Heldenmodelle (Kopf nach +Z, Maße in Metern, Skalierung im Lader).
+
+Credits und Lizenzhinweise: siehe [CREDITS.md](CREDITS.md).
