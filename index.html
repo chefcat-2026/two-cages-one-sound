@@ -330,6 +330,39 @@
     overflow:hidden;
   }
 
+
+  /* SPIELE */
+  .games{
+    background:linear-gradient(180deg,var(--ink) 0%,#14100f 100%);
+    padding:90px 24px;
+    text-align:center;
+    border-top:1px solid #2a2622;
+  }
+  .games .intro{max-width:560px;margin:18px auto 0;color:var(--ash);font-size:0.95rem;line-height:1.6;}
+  .game-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:16px;
+    max-width:900px;
+    margin:44px auto 0;
+    text-align:left;
+  }
+  .game-card{
+    display:flex;flex-direction:column;gap:8px;
+    padding:22px;
+    border:1px solid #3a3632;
+    text-decoration:none;
+    color:var(--paper);
+    transition:all .2s;
+  }
+  .game-card:hover{border-color:var(--blood);background:rgba(196,30,42,0.08);}
+  .game-card:focus-visible{outline:2px solid var(--blood-bright);outline-offset:2px;}
+  .game-card.featured{border:2px solid var(--blood);background:rgba(196,30,42,0.10);}
+  .game-card .tag{font-size:0.68rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--blood-bright);}
+  .game-card h3{font-family:'Metal Mania',cursive;font-weight:400;font-size:1.35rem;color:var(--paper);}
+  .game-card p{font-size:0.88rem;line-height:1.5;color:var(--ash);}
+  .game-card .go{margin-top:auto;padding-top:8px;font-size:0.82rem;color:var(--paper);}
+
   /* FOOTER */
   footer{
     background:var(--ink);
@@ -344,7 +377,9 @@
   footer .game-btn:hover{background:rgba(196,30,42,0.15);border-color:var(--blood-bright) !important;}
 
   @media (max-width:600px){
-    .navlinks{gap:16px;font-size:0.72rem;}
+    .navlinks{gap:14px;font-size:0.72rem;}
+    nav .brand{display:none;}
+    nav .wrap{justify-content:center;}
     .hero{padding:80px 20px 70px;}
   }
 
@@ -362,6 +397,7 @@
     <div class="navlinks">
       <a href="#story">Die Geschichte</a>
       <a href="#seiten">Leseprobe</a>
+      <a href="#spiele">Spielen</a>
       <a href="#kaufen">Kaufen</a>
     </div>
   </div>
@@ -374,6 +410,7 @@
   <div class="cta-row">
     <a href="#kaufen" class="btn btn-solid">Buch kaufen</a>
     <a href="#seiten" class="btn btn-ghost">Leseprobe</a>
+    <a href="#spiele" class="btn btn-ghost">Gratis spielen</a>
   </div>
 </header>
 
@@ -444,6 +481,32 @@
       <span class="fact-num">1.</span>
       <span class="fact-label">Buch von U. Rinner</span>
     </div>
+  </div>
+</section>
+
+<section class="games" id="spiele">
+  <div class="section-label">Zum Buch</div>
+  <div class="section-title">Spielen</div>
+  <p class="intro">Drei kostenlose Spiele im Browser, direkt aus der Geschichte. Ohne Anmeldung, ohne Download.</p>
+  <div class="game-grid">
+    <a class="game-card featured" href="camden-command.html">
+      <span class="tag">Neu · 3D-Strategie</span>
+      <h3>Camden Command</h3>
+      <p>Grünkohl ernten, Proberäume bauen, die Bühne halten und das Bauamt abwehren. Echtzeitstrategie durch acht Kapitel des Buches, mit John und Theo.</p>
+      <span class="go">Jetzt spielen →</span>
+    </a>
+    <a class="game-card" href="camden-walk.html">
+      <span class="tag">Entdecken</span>
+      <h3>Camden Walk</h3>
+      <p>Lauf mit Theo durch Camden und finde die Stationen aus dem Buch.</p>
+      <span class="go">Jetzt spielen →</span>
+    </a>
+    <a class="game-card" href="game.html">
+      <span class="tag">Klicken</span>
+      <h3>Camden Clicker</h3>
+      <p>Zwei Käfige. Zwei Welten. Ein Highscore. Heiz Theo an und halte John im Rhythmus.</p>
+      <span class="go">Jetzt spielen →</span>
+    </a>
   </div>
 </section>
 
