@@ -153,6 +153,12 @@
   .brief .obj li{list-style:none;font-size:.9rem;color:var(--paper-dim);padding-left:16px;position:relative;line-height:1.4}
   .brief .obj li::before{content:"";position:absolute;left:0;top:7px;width:7px;height:7px;border:1px solid var(--ash);transform:rotate(45deg)}
 
+  .brief .tips{background:var(--ink-2);border:1px solid var(--line);border-left:3px solid var(--blood);padding:12px 14px}
+  .brief .tips h4{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--blood-bright);margin-bottom:6px}
+  .brief .tips li{list-style:none;font-size:.9rem;color:var(--paper-dim);padding-left:16px;position:relative;line-height:1.45;margin-top:4px}
+  .brief .tips li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;background:var(--blood)}
+  .help-more h3{font-family:var(--font-display);font-weight:400;font-size:1.1rem;color:var(--paper);margin:18px 0 6px}
+  .help-more p{font-size:.9rem;color:var(--paper-dim);line-height:1.5;margin-top:6px}
   .help{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px 24px;margin-top:14px}
   .help div{display:flex;justify-content:space-between;gap:10px;font-size:.88rem;border-bottom:1px solid var(--line);padding:6px 0;color:var(--paper-dim)}
   .help kbd{font-family:var(--font-ui);background:var(--ink-3);border:1px solid var(--line);padding:1px 7px;border-radius:3px;color:var(--paper);font-size:.8rem;white-space:nowrap}
@@ -394,10 +400,10 @@ const PLAYER_TRAIN = ['maus','fan','roadie'];
 
 /* ---------- Fähigkeiten der Helden ---------- */
 const ABILITIES = {
-  gurren:  {name:'Gurren', ic:'〰️', key:'G', ruf:20, cd:20, owner:'theo', tip:'Gurren (G): Heilt und beschleunigt alle in der Nähe. 25 Ruf.'},
-  fsucker: {name:'Fucker Sucker', ic:'🔥', key:'F', ruf:40, cd:30, owner:'theo', req:'fsucker', tip:'Fucker Sucker (F): Brennt sofort. 70 Schaden im Umkreis. Kein Mittelteil. 50 Ruf.'},
-  riff:    {name:'Der schwere Riff', ic:'🪨', key:'R', ruf:30, cd:25, owner:'john', tip:'Der schwere Riff (R): Jeder Ton ein Stein. 45 Schaden und 3 s Stillstand im Umkreis. 40 Ruf.'},
-  blick:   {name:'Der Blick', ic:'👁️', key:'B', ruf:25, cd:25, owner:'smokey', tip:'Der Blick (B): Registriert und für unwichtig befunden. Gegner im Umkreis fliehen 4 s. 30 Ruf.'}
+  gurren:  {name:'Gurren', ic:'〰️', key:'G', ruf:20, cd:20, owner:'theo', tip:'Gurren (G): Heilt und beschleunigt alle in der Nähe. 20 Ruf, 20 s Pause.'},
+  fsucker: {name:'Fucker Sucker', ic:'🔥', key:'F', ruf:40, cd:30, owner:'theo', req:'fsucker', tip:'Fucker Sucker (F): Brennt sofort. 70 Schaden im Umkreis. Kein Mittelteil. 40 Ruf, 30 s Pause.'},
+  riff:    {name:'Der schwere Riff', ic:'🪨', key:'R', ruf:30, cd:25, owner:'john', tip:'Der schwere Riff (R): Jeder Ton ein Stein. 45 Schaden und 3 s Stillstand im Umkreis. 30 Ruf, 25 s Pause.'},
+  blick:   {name:'Der Blick', ic:'👁️', key:'B', ruf:25, cd:25, owner:'smokey', tip:'Der Blick (B): Registriert und für unwichtig befunden. Gegner im Umkreis fliehen 4 s. 25 Ruf, 25 s Pause.'}
 };
 
 /* ---------- Three.js: Szene, Kamera, Licht ---------- */
@@ -1555,6 +1561,35 @@ function convert(g,u){ u.team=1; u.ring.material.color.setHex(0xe6394a); Audio.s
 Game.prototype.placeValidAny=function(type,cx,cz){ const def=BUILDINGS[type]; const size=def.size; const r=Math.floor(size/2); const sx=size%2?cx-r:cx-r+1, sz=size%2?cz-r:cz-r+1; const w=this.world; for(let dx=0;dx<size;dx++) for(let dz=0;dz<size;dz++){ const x=sx+dx, z=sz+dz; if(!w.free(x,z)) return false; if(w.type[w.idx(x,z)]==='water') return false; } return true; };
 
 /* ---------- Ablauf: Menü, Briefing, Debrief, Pause, Hilfe ---------- */
+
+/* ---------- Erklärungen pro Mission ("Gut zu wissen") ---------- */
+const TIPS = [
+  ['Linksklick wählt eine Figur, Rechtsklick schickt sie los. Mit T wählst du Theo, mit J John.',
+   'Das Radio ist auf der Minimap oben rechts als gelber Punkt markiert.',
+   'Eine Bühne baust du so: Tab „Gebäude“, Bühne anklicken, dann auf freien Boden nahe dem Käfig klicken. Sie kostet 180 Grünkohl und erzeugt Ruf.',
+   'Ruf bezahlt die Fähigkeiten der Helden (Taste G bei Theo, R bei John). Solange die Bühne steht, kommt Ruf nach.',
+   'Wenn Gegner angreifen, ziehst du die Helden zur Bühne zurück und bleibst in der Nähe der eigenen Gebäude.'],
+  ['Mäuse ernten Grünkohl und tragen ihn zum Käfig. Neue Mäuse kommen aus dem Proberaum (25 Grünkohl pro Maus).',
+   'Wilde Mäuse werden zu Fans, wenn Theo in ihrer Nähe ist. So kommen die acht Mäuse in die Band.',
+   'Ein Grünkohl-Lager (110 Grünkohl) in der Nähe der Felder verkürzt die Wege und gibt 25 % Bonus bei der Abgabe.'],
+  ['Du musst den Raum ohne Namen 2:40 lang halten. Er darf nicht fallen.',
+   'Bau Heutürme (80 Grünkohl) rund um den Raum. Mit einer Bühne kommen Verstärkerwände (Fernverteidigung) und Roadies (Fernkampf) dazu.',
+   'Johns „Der schwere Riff“ (R, 30 Ruf) fügt allen im Umkreis Schaden zu und hält sie 3 Sekunden fest. Gut gegen Gruppen.'],
+  ['Hier ist es kalt: Wer sich weit von den eigenen Gebäuden entfernt, verliert langsam Kraft. In der Nähe der eigenen Gebäude erholt man sich wieder. Das ist die Heilung in dieser Mission.',
+   'Theos Gurren (G, 20 Ruf) heilt und beschleunigt alle in seiner Nähe. Kurz vor dem Gegenangriff einsetzen.',
+   'Neu: Fucker Sucker (F, 40 Ruf, 30 s Pause) richtet sofort 70 Schaden im Umkreis an. Ideal gegen Gebäude und Gruppen.',
+   'Das Bauamt sitzt im Nordosten, geschützt von Gegnerwellen und einem Baukran, der in Reichweite schießt. Greife nicht allein mit Theo an: Nimm John und ein paar Fans oder Roadies mit.',
+   'Die beiden Eigentumswohnungen sind optional. Sie schicken regelmäßig Zettel-Boten; wer sie abreißt, bremst die Wellen.'],
+  ['900 Grünkohl brauchst du: mehr Mäuse und ein Lager in der Nähe der Felder helfen am meisten.',
+   'Jede Eigentumswohnung schickt in regelmäßigen Abständen Zettel-Boten. Reiß sie ab, um die Wellen zu bremsen.'],
+  ['Das Immobilien-Büro schickt regelmäßig Boten und Makler. Makler greifen am liebsten Mäuse an, deine Ernte braucht also Schutz.',
+   'Bagger sind langsam, aber stark gegen Gebäude. Lenke sie mit Helden und Fernkampf ab, statt sie am Haus zu lassen.',
+   'Der Van steht im Südosten. John und Theo müssen beide dort ankommen.'],
+  ['In dieser Mission gibt es keine Gegner. Bring John und Theo zum Waldrand.'],
+  ['Zuerst bringst du Theo zur Z7. Dann kommen Adriana und Susanna dazu: Sie heilen, richten aber kaum Schaden an.',
+   'Neben der Z7 stehen jetzt Käfig und Proberaum. Sobald Theo an der Z7 ist, beginnen die Gegner. Bau deshalb zügig Verteidigung.',
+   'Halte die Z7 2:40 lang. Sie muss stehen bleiben.']
+];
 const BRIEF_IMG=[3,4,9,10,11,12,14,18], DEBRIEF_IMG=[2,5,10,7,11,13,15,20];
 const img=(n,cls='')=>`<img class="${cls}" src="${IMG}b${String(n).padStart(2,'0')}.jpg" alt="">`;
 const Flow = {
@@ -1564,7 +1599,7 @@ const Flow = {
   menu(){ if(game){ UI.stop(); game.dispose(); game=null; } const prog=store.get('progress',0);
     this.overlay(`<div class="menu-hero">${img(1)}<div><div class="eyebrow">Two Cages, One Sound · Das Strategiespiel</div><h1>Camden <em>Command</em></h1><p style="margin-top:10px">Zwei Käfige. Zwei Welten. Ein Sound. Und ein Bauamt, das Zettel verteilt. Echtzeitstrategie durch alle Kapitel: Grünkohl ernten, Proberäume bauen, Räume halten, die Stadt überleben.</p></div></div>
       <ul class="missions">${MISSIONS.map(m=>`<li><button ${m.index>prog?'disabled':''} data-m="${m.index}" ${m.index===prog?'autofocus':''}>${img(BRIEF_IMG[m.index],'thumb')}<span><span class="t">${m.index+1} · ${m.title}</span><br><span class="s">${m.chapter}</span></span><span class="st ${m.index<prog?'done':''}">${m.index<prog?'gespielt':m.index===prog?'offen':'gesperrt'}</span></button></li>`).join('')}</ul>
-      <div class="row" style="margin-top:18px"><span class="diff" id="m-diff">${['leicht','normal','hart'].map(d=>`<button data-d="${d}" class="${store.get('diff','normal')===d?'active':''}">${d}</button>`).join('')}</span><button class="btn ghost" id="m-help">Steuerung</button>${prog>0?'<button class="btn ghost" id="m-reset">Fortschritt löschen</button>':''}<a class="btn ghost" href="https://chefcat-2026.github.io/two-cages-one-sound/">Zum Buch</a></div>
+      <div class="row" style="margin-top:18px"><span class="diff" id="m-diff">${['leicht','normal','hart'].map(d=>`<button data-d="${d}" class="${store.get('diff','normal')===d?'active':''}">${d}</button>`).join('')}</span><button class="btn ghost" id="m-help">Hilfe & Steuerung</button>${prog>0?'<button class="btn ghost" id="m-reset">Fortschritt löschen</button>':''}<a class="btn ghost" href="https://chefcat-2026.github.io/two-cages-one-sound/">Zum Buch</a></div>
       <p class="footnote">Version ${VERSION}. Der Schalter „Tusche“ oben rechts rendert das Spiel schwarz-weiß-rot wie die Illustrationen. Nach dem Roman von U. Rinner. Läuft im Browser, am besten mit Maus und Tastatur. Am Handy: Tippen wählt, langes Tippen oder Tippen auf freien Boden schickt los, Ziehen bewegt die Kamera, zwei Finger zoomen.</p>`);
     document.querySelectorAll('.missions button').forEach(b=>b.onclick=()=>this.briefing(MISSIONS[+b.dataset.m]));
     document.querySelectorAll('.missions button').forEach(b=>b.onclick=()=>this.briefing(MISSIONS[+b.dataset.m]));
@@ -1573,7 +1608,7 @@ const Flow = {
   },
   briefing(m){ this.current=m; const obj=m.objectives.map(o=>`<li>${typeof o.text==='function'?o.text({}):o.text}${o.optional?' (optional)':''}</li>`).join('');
     this.overlay(`<div class="eyebrow">Mission ${m.index+1} · ${m.chapter}</div><h2>${m.title}</h2><div class="caption">${m.caption}</div><div class="scene">${img(BRIEF_IMG[m.index])}</div>
-      <div class="brief"><div class="lines">${m.brief.map(([w,l])=>`<div><b class="${w}">${this.name(w)}</b>${l}</div>`).join('')}</div><div class="obj"><h4>Ziele</h4><ul>${obj}</ul></div></div>
+      <div class="brief"><div class="lines">${m.brief.map(([w,l])=>`<div><b class="${w}">${this.name(w)}</b>${l}</div>`).join('')}</div><div class="obj"><h4>Ziele</h4><ul>${obj}</ul></div>${(TIPS[m.index]||[]).length?`<div class="tips"><h4>Gut zu wissen</h4><ul>${TIPS[m.index].map(t=>`<li>${t}</li>`).join('')}</ul></div>`:''}</div>
       <div class="row" style="margin-top:18px"><button class="btn solid" id="b-start">Mission starten</button><button class="btn ghost" id="b-back">Zurück</button></div>`);
     $('b-start').onclick=()=>this.start(m); $('b-back').onclick=()=>this.menu();
   },
@@ -1588,10 +1623,10 @@ const Flow = {
       ${last?'<p class="footnote">Born in Borehamwood. Died in Basel. Lived everywhere in between. · <a href="https://chefcat-2026.github.io/two-cages-one-sound/">Das Buch</a></p>':''}`);
     const n=$('d-next'); if(n) n.onclick=()=>this.briefing(MISSIONS[m.index+1]); $('d-again').onclick=()=>this.briefing(m); $('d-menu').onclick=()=>this.menu();
   },
-  pause(){ if(!game) return; this.paused=true; this.overlay(`<div class="eyebrow">Pause · ${game.mission.title}</div><h2>Kurz Stille.</h2><div class="row" style="margin-top:18px"><button class="btn solid" id="p-cont">Weiter</button><button class="btn ghost" id="p-restart">Mission neu starten</button><button class="btn ghost" id="p-help">Steuerung</button><button class="btn ghost" id="p-menu">Zum Menü</button></div>`);
+  pause(){ if(!game) return; this.paused=true; this.overlay(`<div class="eyebrow">Pause · ${game.mission.title}</div><h2>Kurz Stille.</h2><div class="row" style="margin-top:18px"><button class="btn solid" id="p-cont">Weiter</button><button class="btn ghost" id="p-restart">Mission neu starten</button><button class="btn ghost" id="p-help">Hilfe & Steuerung</button><button class="btn ghost" id="p-menu">Zum Menü</button></div>`);
     $('p-cont').onclick=()=>{ this.paused=false; this.hide(); }; $('p-restart').onclick=()=>{ this.paused=false; this.start(game.mission); }; $('p-help').onclick=()=>this.help(true); $('p-menu').onclick=()=>{ this.paused=false; this.menu(); }; },
   help(inGame){ if(inGame) this.paused=true;
-    this.overlay(`<div class="eyebrow">Steuerung</div><h2>So geht das.</h2><div class="help">
+    this.overlay(`<div class="eyebrow">Hilfe & Steuerung</div><h2>So geht das.</h2><div class="help">
       <div><span>Figur wählen</span><kbd>Linksklick</kbd></div><div><span>Mehrere wählen</span><kbd>Shift + Ziehen</kbd></div><div><span>Bewegen · Angreifen · Ernten</span><kbd>Rechtsklick</kbd></div><div><span>Zur Auswahl hinzufügen</span><kbd>Shift</kbd></div>
       <div><span>Gleiche Einheiten wählen</span><kbd>Doppelklick</kbd></div><div><span>Angriffsbewegung</span><kbd>X</kbd></div><div><span>Halt</span><kbd>H</kbd></div><div><span>John · Theo wählen</span><kbd>J</kbd> <kbd>T</kbd></div>
       <div><span>Karte ziehen</span><kbd>Linke oder rechte Maustaste halten</kbd></div><div><span>Kamera bewegen</span><kbd>WASD</kbd> <kbd>Pfeile</kbd> <kbd>Mausrand</kbd></div><div><span>Kamera drehen</span><kbd>Q</kbd> <kbd>E</kbd></div><div><span>Zoom</span><kbd>Mausrad</kbd></div><div><span>Zur Basis</span><kbd>M</kbd></div><div><span>Zum letzten Alarm</span><kbd>Leertaste</kbd></div><div><span>Diese Hilfe</span><kbd>F1</kbd></div>
@@ -1599,6 +1634,16 @@ const Flow = {
       <p style="margin-top:14px"><b>Grafik:</b> „Grafik“ oben wechselt zwischen niedrig (ohne Schatten und Effekte), mittel (Schatten, Bloom, Kantenglättung) und hoch (dazu Umgebungsverdeckung, Tiefenschärfe, weiche Schatten). Ruckelt es, senkt das Spiel die Auflösung selbst.</p>
       <p style="margin-top:14px"><b>Warnungen:</b> Greift das Bauamt an oder rückt es näher, erscheint ein roter Pfeil am Bildrand, die Minimap pulsiert, ein Ton geht. Leertaste springt hin.</p>
       <p style="margin-top:14px"><b>Grünkohl</b> kommt von den Feldern, Mäuse tragen ihn zum Käfig oder zum Lager. <b>Ruf</b> entsteht auf der Bühne und mit jedem Zettel, der nicht klebt. Ruf bezahlt die Fähigkeiten der Helden.</p>
+      <div class="help-more"><h3>Spielprinzip</h3>
+        <p><b>Grünkohl</b> ist dein Geld. Mäuse ernten ihn auf den Feldern und tragen ihn zum Käfig oder zu einem Lager. Davon baust du Gebäude und trainierst Einheiten.</p>
+        <p><b>Ruf</b> bezahlt die Fähigkeiten von Theo, John und Smokey. Er entsteht auf der Bühne und mit jedem Zettel, der nicht klebt.</p>
+        <h3>Heilung</h3>
+        <p>Theos <b>Gurren</b> (G, 20 Ruf) heilt und beschleunigt alle in der Nähe. In der Winter-Mission erholen sich Figuren außerdem in der Nähe der eigenen Gebäude und verlieren weit davon entfernt langsam Kraft. Adriana und Susanna heilen ebenfalls, sobald sie dazukommen.</p>
+        <h3>Fähigkeiten</h3>
+        <p><b>Theo</b>: Gurren (G) heilt und beschleunigt; Fucker Sucker (F, ab Mission 4) macht 70 Schaden im Umkreis.<br><b>John</b>: Der schwere Riff (R) macht 45 Schaden und hält Gegner 3 Sekunden fest.<br><b>Smokey</b>: Der Blick (B) lässt Gegner in der Nähe 4 Sekunden fliehen.</p>
+        <h3>Schwierigkeit</h3>
+        <p>Im Menü gibt es die Stufen leicht, normal und hart. „Leicht“ schickt weniger Gegnerwellen, und die Gegner haben weniger Leben.</p>
+      </div>
       <div class="row" style="margin-top:18px"><button class="btn solid" id="h-back">${inGame?'Weiter':'Zurück'}</button></div>`);
     $('h-back').onclick=()=>{ if(inGame){ this.paused=false; this.hide(); } else this.menu(); }; }
 };
